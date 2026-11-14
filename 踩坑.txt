@@ -25,4 +25,13 @@
 - 损坏 JSON / 不支持 formatVersion / 缺失文件 → 可读中文错误面板，init 阶段即 renderFatal，绝不触发保存、绝不覆写或新建文件（实机逐字节比对确认）。
 - 外部修改：Vault.process 内比对磁盘内容与上次自写内容，不一致即停自动保存 + 横幅提示重新载入（确认后才丢弃本地改动重载）。
 
+【UI 阅读优先（按钮墙修复）】
+- 深层嵌套时所有操作按钮常驻会把内容糊成按钮墙。改为阅读优先：toolbar 动作按钮、列×、行×、单元格+子表、展开态折叠 toggle 默认 opacity:0 + pointer-events:none，悬停/键盘聚焦（:hover / :focus-within）到对应区域才浮现。
+- 无子表的单元格用 .nct-empty-child 容器 max-height:0 + overflow:hidden 收起，不预留按钮空位；悬停才展开。有子表的容器 .nct-has-child 正常占位。
+- 折叠态 toggle 加 .is-collapsed 常驻显示，便于发现被收起的子表。
+- 验证「按钮是否隐藏」要测有效可见性（容器高度/opacity），别只测按钮自身 opacity——+子表自身 opacity 恒为 1，靠父容器收起隐藏。
+
+【插件热重载缓存】
+- app.plugins.disablePlugin → enablePlugin 会重新注入 styles.css，但不一定刷新 main.js 的模块缓存：可能出现「新 CSS 生效、旧 DOM class 仍在」的半新半旧状态。改渲染逻辑后须整窗重载（location.reload()）清模块缓存，再 rebuildView，否则验收看到的是旧代码。
+
 （后续踩坑随开发追加）

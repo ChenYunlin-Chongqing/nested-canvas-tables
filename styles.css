@@ -140,3 +140,52 @@
 .nct-conflict button {
   font-size: var(--font-ui-smaller);
 }
+
+/* 阅读优先：操作控件默认隐藏，悬停/键盘聚焦到对应区域才浮现，避免深层嵌套变成按钮墙 */
+.nct-toolbar .nct-btn,
+.nct-table th .nct-del,
+.nct-table tbody tr .nct-del,
+.nct-btn.nct-toggle {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.nct-toolbar:hover .nct-btn,
+.nct-toolbar:focus-within .nct-btn,
+.nct-table th:hover .nct-del,
+.nct-table th:focus-within .nct-del,
+.nct-table tbody tr:hover .nct-del,
+.nct-table tbody tr:focus-within .nct-del,
+.nct-cell-td:hover .nct-toggle,
+.nct-cell-td:focus-within .nct-toggle {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 折叠态常驻一个小标记，便于发现被收起的子表 */
+.nct-btn.nct-toggle.is-collapsed {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.nct-btn.nct-toggle {
+  padding: 1px 6px;
+  font-size: var(--font-ui-smaller);
+}
+
+/* 无子表的单元格不预留按钮空位，悬停时才展开 +子表 */
+.nct-cell-child.nct-empty-child {
+  max-height: 0;
+  margin-top: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.12s ease, opacity 0.12s ease;
+}
+
+.nct-cell-td:hover .nct-cell-child.nct-empty-child,
+.nct-cell-td:focus-within .nct-cell-child.nct-empty-child {
+  max-height: 40px;
+  margin-top: 4px;
+  opacity: 1;
+}

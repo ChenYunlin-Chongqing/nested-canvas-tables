@@ -185,10 +185,10 @@ export class NctableView extends MarkdownRenderChild {
     td.appendChild(text);
 
     const childArea = document.createElement("div");
-    childArea.className = "nct-cell-child";
+    childArea.className = "nct-cell-child " + (cell.childTable ? "nct-has-child" : "nct-empty-child");
     if (cell.childTable) {
       const isCollapsed = this.collapsed.has(cell.id);
-      const toggle = this.button(isCollapsed ? "▶ 展开子表" : "▼ 折叠子表", "nct-toggle", () => {
+      const toggle = this.button(isCollapsed ? "▶ 展开子表" : "▼ 折叠子表", "nct-toggle" + (isCollapsed ? " is-collapsed" : ""), () => {
         if (this.collapsed.has(cell.id)) this.collapsed.delete(cell.id);
         else this.collapsed.add(cell.id);
         this.render();
