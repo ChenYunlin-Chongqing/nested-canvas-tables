@@ -8,4 +8,21 @@
 【工具链】沿用 reminder-calendar：esbuild + TypeScript + node --test；不引 Svelte（纯 DOM 渲染，规格第 6 条）。
 构建产物目录优先级：NCT_OUT 环境变量 > dev.config.json（gitignored）> ./dist。
 
+【Canvas 嵌入交互（硬门槛相关）】
+- 文件卡片内容默认被 .canvas-node-content-blocker 遮罩拦截鼠标；须先点击节点聚焦（is-focused），blocker 才 display:none，代码块控件才可交互。
+- 防误拖：交互容器上 pointerdown/mousedown/touchstart/dblclick 只 stopPropagation、不 preventDefault——保住输入默认行为，节点标题区拖动留给 Canvas 原生。实机断言节点 style.transform 全程不变。
+- 缩放手柄是 Canvas 原生 chrome（仅 is-selected 态出现），位于代码块之外，插件无法影响；自动化点击只能到 is-focused、难触发 is-selected，故 resize 列为手动验收项（非插件缺陷）。
+
+【实机验收（CDP）踩坑】
+- 插件重载后，已渲染的 markdown 视图不会自动套用新处理器；须 leaf.rebuildView() 强制重建（或重开文件），否则看到的仍是旧 DOM。
+- canvas-node-content 是 overflow:hidden：超出节点高度的子表内容被裁剪，深层按钮落在节点外，视口真实点击点不到。验收时放大节点容纳内容，或对深层按钮用合成 el.click() 驱动真实 AbortController 监听器（首格仍用真实 Input 点击证明可信输入）。
+- canvas:zoom-to-fit 对超大节点不一定缩放进视口（节点仍按原像素渲染，工具栏按钮跑出屏幕）；真实点击前先确认目标坐标在视口内。
+- canvas 文件保存有防抖：移动/缩放断言用 DOM node.style.transform 即时值，别读 .canvas 文件（会读到旧值）。
+- Canvas 节点运行态对象 n.file 是 TFile 对象（含循环引用），CDP returnByValue 序列化报 "Object reference chain is too long"；取路径用 n.filePath（字符串）。节点类型读 .canvas 文件 JSON 的 nodes[].type，运行态对象不暴露 n.type。
+- app.plugins.disablePlugin(id) 只卸载运行实例（app.plugins.plugins[id] 变 undefined），不改持久化 enabledPlugins 集合；判断「真禁用」看 plugins[id] 实例是否存在，不能只看 enabledPlugins.has()。「禁用后文件保留」验收以实例卸载 + 文件仍在为准。
+
+【数据保护】
+- 损坏 JSON / 不支持 formatVersion / 缺失文件 → 可读中文错误面板，init 阶段即 renderFatal，绝不触发保存、绝不覆写或新建文件（实机逐字节比对确认）。
+- 外部修改：Vault.process 内比对磁盘内容与上次自写内容，不一致即停自动保存 + 横幅提示重新载入（确认后才丢弃本地改动重载）。
+
 （后续踩坑随开发追加）
