@@ -2,6 +2,69 @@
   padding: 4px;
 }
 
+.nct-table-block {
+  margin: 2px 0;
+}
+
+.nct-table-block.nct-child {
+  margin-top: 6px;
+  padding: 6px;
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+}
+
+.nct-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.nct-title {
+  font-weight: 600;
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+  margin-right: auto;
+}
+
+.nct-btn {
+  font-size: var(--font-ui-smaller);
+  padding: 2px 8px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--background-modifier-border);
+  background: var(--interactive-normal);
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
+.nct-btn:hover {
+  background: var(--interactive-hover);
+}
+
+.nct-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.nct-btn.nct-danger {
+  color: var(--text-error);
+}
+
+.nct-btn.nct-del {
+  padding: 0 5px;
+  margin-left: 6px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.nct-btn.nct-toggle,
+.nct-btn.nct-addchild {
+  border-style: dashed;
+  color: var(--text-muted);
+}
+
 .nct-table {
   border-collapse: collapse;
   width: 100%;
@@ -20,6 +83,14 @@
   background: var(--background-secondary);
   color: var(--text-muted);
   font-weight: 600;
+  white-space: nowrap;
+}
+
+.nct-rowdel-col {
+  width: 28px;
+  text-align: center;
+  border: none !important;
+  background: transparent !important;
 }
 
 .nct-cell {
@@ -27,10 +98,16 @@
   min-height: 1.4em;
   outline: none;
   cursor: text;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .nct-cell:focus {
   background: var(--background-modifier-hover);
+}
+
+.nct-cell-child {
+  margin-top: 4px;
 }
 
 .nct-status {

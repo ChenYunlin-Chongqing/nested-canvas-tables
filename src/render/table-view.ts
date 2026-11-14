@@ -1,13 +1,24 @@
 import { App, MarkdownRenderChild, TFile } from "obsidian";
-import type { Cell, TableDocument } from "../core/model.ts";
+import {
+  addColumn,
+  addRow,
+  createTable,
+  hasContent,
+  removeColumn,
+  removeRow,
+  type Cell,
+  type Table,
+  type TableDocument,
+} from "../core/model.ts";
 import { TableStore } from "../core/store.ts";
 
-// 最小原型：平面表格编辑 + 自动保存，用于验证 Canvas 文件卡片内处理器与输入交互（规格第 4 条硬门槛）
 export class NctableView extends MarkdownRenderChild {
   private store: TableStore | null = null;
   private doc: TableDocument | null = null;
   private saveTimer: number | null = null;
   private statusEl: HTMLElement | null = null;
+  private collapsed = new Set<string>();
+  private renderAbort: AbortController | null = null;
 
   constructor(private app: App, private source: string, containerEl: HTMLElement) {
     super(containerEl);
@@ -22,6 +33,8 @@ export class NctableView extends MarkdownRenderChild {
   }
 
   onunload(): void {
+    this.renderAbort?.abort();
+    this.renderAbort = null;
     if (this.saveTimer !== null) {
       window.clearTimeout(this.saveTimer);
       this.saveTimer = null;
@@ -58,45 +71,154 @@ export class NctableView extends MarkdownRenderChild {
   }
 
   private render(): void {
+    this.renderAbort?.abort();
+    this.renderAbort = new AbortController();
     this.containerEl.empty();
     this.containerEl.addClass("nct-wrap");
     if (!this.doc) return;
-
-    const table = document.createElement("table");
-    table.className = "nct-table";
-    const thead = document.createElement("thead");
-    const headRow = document.createElement("tr");
-    this.doc.columns.forEach((_, i) => {
-      const th = document.createElement("th");
-      th.textContent = `列 ${i + 1}`;
-      headRow.appendChild(th);
-    });
-    thead.appendChild(headRow);
-    table.appendChild(thead);
-
-    const tbody = document.createElement("tbody");
-    for (const row of this.doc.rows) {
-      const tr = document.createElement("tr");
-      for (const cell of row.cells) {
-        const td = document.createElement("td");
-        td.className = "nct-cell";
-        td.contentEditable = "plaintext-only";
-        td.textContent = cell.text;
-        this.registerDomEvent(td, "input", () => {
-          cell.text = td.textContent ?? "";
-          this.scheduleSave();
-        });
-        tr.appendChild(td);
-      }
-      tbody.appendChild(tr);
-    }
-    table.appendChild(tbody);
-    this.containerEl.appendChild(table);
-
+    this.containerEl.appendChild(this.buildTable(this.doc, [], false));
     this.statusEl = document.createElement("div");
     this.statusEl.className = "nct-status";
     this.statusEl.textContent = "已加载";
     this.containerEl.appendChild(this.statusEl);
+  }
+
+  private signal(): AddEventListenerOptions {
+    return { signal: this.renderAbort!.signal };
+  }
+
+  private button(label: string, cls: string, onClick: () => void): HTMLButtonElement {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = `nct-btn ${cls}`;
+    b.textContent = label;
+    b.addEventListener("click", onClick, this.signal());
+    return b;
+  }
+
+  private buildTable(table: Table, path: string[], isChild: boolean): HTMLElement {
+    const block = document.createElement("div");
+    block.className = isChild ? "nct-table-block nct-child" : "nct-table-block";
+
+    const toolbar = document.createElement("div");
+    toolbar.className = "nct-toolbar";
+    const title = document.createElement("span");
+    title.className = "nct-title";
+    title.textContent = table.title;
+    toolbar.appendChild(title);
+    toolbar.appendChild(this.button("+ 行", "", () => { addRow(table); this.render(); this.scheduleSave(); }));
+    toolbar.appendChild(this.button("+ 列", "", () => { addColumn(table); this.render(); this.scheduleSave(); }));
+    if (isChild) {
+      toolbar.appendChild(this.button("删除子表", "nct-danger", () => {
+        if (hasContent(table) && !window.confirm(`删除子表格「${table.title}」及其全部内容，确定？`)) return;
+        const parentCell = this.cellAtPath(path);
+        if (parentCell) delete parentCell.childTable;
+        this.render();
+        this.scheduleSave();
+      }));
+    }
+    block.appendChild(toolbar);
+
+    const tableEl = document.createElement("table");
+    tableEl.className = "nct-table";
+    const thead = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    table.columns.forEach((colId, i) => {
+      const th = document.createElement("th");
+      const label = document.createElement("span");
+      label.textContent = `列 ${i + 1}`;
+      th.appendChild(label);
+      const del = this.button("×", "nct-del", () => {
+        const occupied = table.rows.some((r) => { const c = r.cells[i]; return c.text.trim() !== "" || !!c.childTable; });
+        if (occupied && !window.confirm(`删除第 ${i + 1} 列将同时删除该列所有单元格内容（含子表格），确定？`)) return;
+        removeColumn(table, colId);
+        this.render();
+        this.scheduleSave();
+      });
+      del.disabled = table.columns.length <= 1;
+      del.title = "删除此列";
+      th.appendChild(del);
+      headRow.appendChild(th);
+    });
+    const corner = document.createElement("th");
+    corner.className = "nct-rowdel-col";
+    headRow.appendChild(corner);
+    thead.appendChild(headRow);
+    tableEl.appendChild(thead);
+
+    const tbody = document.createElement("tbody");
+    table.rows.forEach((row, ri) => {
+      const tr = document.createElement("tr");
+      row.cells.forEach((cell, ci) => tr.appendChild(this.buildCell(cell, table, path, ri, ci)));
+      const rowDel = document.createElement("td");
+      rowDel.className = "nct-rowdel-col";
+      const del = this.button("×", "nct-del", () => {
+        const occupied = row.cells.some((c) => c.text.trim() !== "" || !!c.childTable);
+        if (occupied && !window.confirm(`删除第 ${ri + 1} 行及其全部内容（含子表格），确定？`)) return;
+        removeRow(table, row.id);
+        this.render();
+        this.scheduleSave();
+      });
+      del.disabled = table.rows.length <= 1;
+      del.title = "删除此行";
+      rowDel.appendChild(del);
+      tr.appendChild(rowDel);
+      tbody.appendChild(tr);
+    });
+    tableEl.appendChild(tbody);
+    block.appendChild(tableEl);
+    return block;
+  }
+
+  private buildCell(cell: Cell, table: Table, path: string[], ri: number, ci: number): HTMLElement {
+    const td = document.createElement("td");
+    td.className = "nct-cell-td";
+
+    const text = document.createElement("div");
+    text.className = "nct-cell";
+    text.contentEditable = "plaintext-only";
+    text.textContent = cell.text;
+    text.addEventListener("input", () => {
+      cell.text = text.textContent ?? "";
+      this.scheduleSave();
+    }, this.signal());
+    td.appendChild(text);
+
+    const childArea = document.createElement("div");
+    childArea.className = "nct-cell-child";
+    if (cell.childTable) {
+      const isCollapsed = this.collapsed.has(cell.id);
+      const toggle = this.button(isCollapsed ? "▶ 展开子表" : "▼ 折叠子表", "nct-toggle", () => {
+        if (this.collapsed.has(cell.id)) this.collapsed.delete(cell.id);
+        else this.collapsed.add(cell.id);
+        this.render();
+      });
+      childArea.appendChild(toggle);
+      if (!isCollapsed) {
+        childArea.appendChild(this.buildTable(cell.childTable, [...path, cell.id], true));
+      }
+    } else {
+      childArea.appendChild(this.button("+ 子表", "nct-addchild", () => {
+        cell.childTable = createTable(`子表格 ${ri + 1}-${ci + 1}`, 2, 1);
+        this.render();
+        this.scheduleSave();
+      }));
+    }
+    td.appendChild(childArea);
+    return td;
+  }
+
+  private cellAtPath(path: string[]): Cell | null {
+    if (!this.doc || path.length === 0) return null;
+    let current: Table = this.doc;
+    for (let i = 0; i < path.length; i++) {
+      const cell = current.rows.flatMap((r) => r.cells).find((c) => c.id === path[i]);
+      if (!cell) return null;
+      if (i === path.length - 1) return cell;
+      if (!cell.childTable) return null;
+      current = cell.childTable;
+    }
+    return null;
   }
 
   private scheduleSave(): void {
@@ -125,6 +247,7 @@ export class NctableView extends MarkdownRenderChild {
   }
 
   private renderFatal(message: string): void {
+    this.renderAbort?.abort();
     this.containerEl.empty();
     this.containerEl.addClass("nct-wrap");
     const box = document.createElement("div");
@@ -141,10 +264,10 @@ export class NctableView extends MarkdownRenderChild {
     label.textContent = "数据文件已被外部修改，自动保存已停止。";
     const btn = document.createElement("button");
     btn.textContent = "重新载入（丢弃本地未保存修改）";
-    this.registerDomEvent(btn, "click", () => {
+    btn.addEventListener("click", () => {
       if (!window.confirm("重新载入将丢弃本地未保存的修改，确定继续？")) return;
       void this.reload();
-    });
+    }, this.signal());
     banner.appendChild(label);
     banner.appendChild(btn);
     this.containerEl.prepend(banner);
@@ -158,6 +281,7 @@ export class NctableView extends MarkdownRenderChild {
       return;
     }
     this.doc = res.doc;
+    this.collapsed.clear();
     this.render();
   }
 }
