@@ -56,3 +56,14 @@ test("非对象内容被拒绝", () => {
     assert.equal(res.ok, false);
   }
 });
+
+test("合法整格 style 通过、坏 style 被拒绝", () => {
+  const good = createDocument("style");
+  good.rows[0].cells[0].style = { color: "red", bg: "tint-2" };
+  assert.equal(parseDocument(JSON.stringify(good)).ok, true);
+  const bad = createDocument("badstyle");
+  (bad.rows[0].cells[0] as { style?: unknown }).style = { color: "nope" };
+  const res = parseDocument(JSON.stringify(bad));
+  assert.equal(res.ok, false);
+  if (!res.ok) assert.match(res.error, /color/);
+});

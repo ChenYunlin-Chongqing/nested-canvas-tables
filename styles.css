@@ -210,3 +210,81 @@
   margin-top: 4px;
   opacity: 1;
 }
+
+/* 一次性渐隐提示条：不挡输入 */
+.nct-hint {
+  margin-top: 4px;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+.nct-hint.is-faded {
+  opacity: 0;
+}
+
+/* markdown inline 渲染 */
+.nct-cell code {
+  background: var(--code-background, var(--background-secondary));
+  border-radius: var(--radius-s);
+  padding: 0 3px;
+  font-family: var(--font-monospace);
+}
+
+.nct-cell mark.nct-md-highlight {
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
+/* 新手 coach-mark 浮层与高亮环 */
+.nct-tour {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 24px;
+  display: flex;
+  justify-content: center;
+  z-index: var(--layer-modal, 100);
+  pointer-events: none;
+}
+
+.nct-tour-card {
+  pointer-events: auto;
+  max-width: 480px;
+  padding: 10px 14px;
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-s);
+}
+
+.nct-tour-text {
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+  margin-bottom: 8px;
+}
+
+.nct-tour-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.nct-tour-btns button {
+  font-size: var(--font-ui-smaller);
+  padding: 2px 10px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--background-modifier-border);
+  background: var(--interactive-normal);
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
+.nct-tour-ring {
+  position: fixed;
+  border: 2px solid var(--interactive-accent);
+  border-radius: var(--radius-s);
+  pointer-events: none;
+  z-index: var(--layer-modal, 100);
+}

@@ -1,4 +1,5 @@
 import type { TableDocument } from "./model.ts";
+import { validateCellStyle } from "./style.ts";
 
 export type ParseResult = { ok: true; doc: TableDocument } | { ok: false; error: string };
 
@@ -60,6 +61,8 @@ function checkCell(value: unknown, ids: Set<string>, label: string): string | nu
   if (ids.has(c.id)) return `${label} id 重复：${c.id}`;
   ids.add(c.id);
   if (typeof c.text !== "string") return `${label} text 不是字符串`;
+  const styleError = validateCellStyle(c.style);
+  if (styleError) return `${label} ${styleError}`;
   if (c.childTable !== undefined) {
     return checkTable(c.childTable, ids, `${label}的子表格`);
   }

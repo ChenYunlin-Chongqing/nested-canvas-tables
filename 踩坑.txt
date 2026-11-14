@@ -32,7 +32,8 @@
 - 验证「按钮是否隐藏」要测有效可见性（容器高度/opacity），别只测按钮自身 opacity——+子表自身 opacity 恒为 1，靠父容器收起隐藏。
 
 【插件热重载缓存】
-- app.plugins.disablePlugin → enablePlugin 会重新注入 styles.css，但不一定刷新 main.js 的模块缓存：可能出现「新 CSS 生效、旧 DOM class 仍在」的半新半旧状态。改渲染逻辑后须整窗重载（location.reload()）清模块缓存，再 rebuildView，否则验收看到的是旧代码。
+- 实测（2026-11-14）：location.reload() 并不刷新插件 main.js 的模块缓存——重载后命令/设置仍是旧代码，尽管磁盘 main.js 已是新构建。正确做法是 app.plugins.disablePlugin(id) → enablePlugin(id) 重新注入运行实例，再 leaf.rebuildView() 重建已渲染视图。改渲染逻辑后按此顺序验收，否则看到旧代码。
+- disablePlugin → enablePlugin 会重新注入 styles.css；若只改 CSS 可不必整窗重载。
 
 【OneNote 式文档表格（去按钮墙二期）】
 - 用户参照 OneNote 医学表格：要有意义的可编辑列名（病史/症状/体征/检查）、嵌套子表是带自己表头的真实表格、阅读态无任何标题栏与按钮。据此把 columns 从「col_id 唯一标识」改为「可编辑表头文字」（默认 列 N），删除按索引；旧 col_id 数据在 store.load 时经 normalizeColumnHeaders 递归迁移为 列 N，校验放宽为「至少一列、均为字符串」（允许空/重名表头）。
@@ -42,5 +43,20 @@
 【CDP 验证：画布隐藏重复渲染】
 - 一个 canvas 文件节点在 DOM 里可能对应多个 .nct-wrap（Obsidian 内部保留隐藏副本），querySelectorAll 会把隐藏副本与嵌套子表一起算进去，导致「列名数量/迁移」断言误报。验证时整窗重载后取首个 wrap，且根表头用 `> .nct-table-block > .nct-table > thead .nct-colhead` 限定（子表在根表单元格内，属后代，须用 >thead 排除）；可见性以截图为准（用户只见单表）。
 - 自动保存防抖 600ms：创建/编辑后读盘断言须等 ≥900ms，否则读到旧值误判「未持久化」。
+
+【格式右键菜单（#8）】
+- Obsidian 桌面端 Menu 默认走原生菜单（无 DOM），CDP 查 .menu-item 为空、也无法主题化。须 menu.setUseNativeMenu(false) 强制 DOM 菜单，才能验收与套主题。
+- MenuItem 有 setChecked 但无 setSubmenu；颜色/底纹用「文字颜色：红」「底纹：红晕」等分组扁平项 + setChecked 标示当前值，不做二级子菜单。
+- 单元格模型改为「markdown 源码」：cell.text 存源码，聚焦态 contenteditable 显示源码、失焦态用自研 renderInlineMarkdown 渲染（仅 ** * == ~~ ` 五种、不嵌套、createElement/textContent 安全渲染）。formatVersion 仍为 1，无需迁移；style 仅 {bg?,color?} 白名单 token，validate 递归校验。
+- 包裹语义：有选区则包裹选区，无选区在光标处插入成对标记；applyWrap 读 selection 偏移时注意 anchorNode 可能是编辑器 div 本身（此时 startOffset 是子节点索引而非字符偏移），无选区统一回退到 cell.text.length。
+
+【新手引导（#9）】
+- openDemo 曾把 columns 设成 4 列却沿用 createDocument 默认 3 列的行单元格，doc.rows[0].cells[3] 为 undefined 直接崩溃、引导永不弹出。改列数时必须同步重建行单元格（createRow(4)）。
+- 引导覆盖层 .nct-tour 挂 document.body，高亮环 .nct-tour-ring 按目标 getBoundingClientRect 定位；Enter 下一步、Esc 跳过；「不再显示」双置 onboarded=true 且 showHints=false；首次运行 startTour(true) 即使跳过也置 onboarded=true。重开示例（openDemo）不碰这两个标志。
+
+【CDP 验收夹具污染与聚焦】
+- 复用旧卡片/画布做验收会被早期失败运行污染：卡片可能被塞入垃圾前缀与多个 nctable 块，指向不同 data 文件，导致两个 .nct-wrap 写到不同文件、断言读错文件恒为空。验收应建专用干净夹具（单 nctable 块 + 独立 data/card/canvas），别复用业务夹具。
+- 重置 data 文件须先卸载持有它的视图（detach leaf）再 modify 再重开；视图开着时外部 modify 会触发 store 冲突保护停写，且 modify 事件会 race 到新 store。
+- canvas-node-content-blocker 只拦截指针事件，不挡程序化 focus：验收聚焦单元格直接 el.focus() 即可，无需真实点击/双击进入节点编辑态（双击反而可能触发画布缩放/重渲染干扰）。
 
 （后续踩坑随开发追加）

@@ -1,7 +1,10 @@
+import type { CellStyle } from "./style.ts";
+
 export interface Cell {
   id: string;
   text: string;
   childTable?: Table;
+  style?: CellStyle;
 }
 
 export interface Row {

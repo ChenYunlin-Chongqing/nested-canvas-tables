@@ -3,10 +3,14 @@ import type NestedCanvasTablesPlugin from "./main.ts";
 
 export interface NctSettings {
   rootDir: string;
+  onboarded: boolean;
+  showHints: boolean;
 }
 
 export const DEFAULT_SETTINGS: NctSettings = {
   rootDir: "NestedTables",
+  onboarded: false,
+  showHints: true,
 };
 
 export class NctSettingTab extends PluginSettingTab {
@@ -27,6 +31,15 @@ export class NctSettingTab extends PluginSettingTab {
             this.plugin.settings.rootDir = value.trim().replace(/^\/+|\/+$/g, "") || DEFAULT_SETTINGS.rootDir;
             await this.plugin.saveData(this.plugin.settings);
           }),
+      );
+    new Setting(this.containerEl)
+      .setName("显示操作提示")
+      .setDesc("在表格上方显示一次性渐隐提示（悬停/右键/markdown 语法）")
+      .addToggle((t) =>
+        t.setValue(this.plugin.settings.showHints).onChange(async (value) => {
+          this.plugin.settings.showHints = value;
+          await this.plugin.saveData(this.plugin.settings);
+        }),
       );
   }
 }

@@ -1,8 +1,9 @@
-import { App, MarkdownRenderChild, TFile } from "obsidian";
+import { App, MarkdownRenderChild, Menu, TFile } from "obsidian";
 import {
   addColumn,
   addRow,
   createTable,
+  findCell,
   hasContent,
   removeColumn,
   removeRow,
@@ -10,6 +11,8 @@ import {
   type Table,
   type TableDocument,
 } from "../core/model.ts";
+import { MD_TOKENS, renderInlineMarkdown, wrapSelection } from "../core/markdown.ts";
+import { BG_TINTS, TEXT_COLORS, bgTintCss, textColorCss } from "../core/style.ts";
 import { TableStore } from "../core/store.ts";
 
 export class NctableView extends MarkdownRenderChild {
@@ -29,6 +32,14 @@ export class NctableView extends MarkdownRenderChild {
     for (const type of ["pointerdown", "mousedown", "touchstart", "dblclick"] as const) {
       this.registerDomEvent(this.containerEl, type, (e) => e.stopPropagation());
     }
+    this.registerDomEvent(this.containerEl, "contextmenu", (e) => {
+      const td = (e.target as HTMLElement).closest?.(".nct-cell-td") as HTMLElement | null;
+      if (!td || !this.doc) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const cell = findCell(this.doc, td.dataset.cellId ?? "");
+      if (cell) this.openCellMenu(cell, td, e);
+    });
     void this.init();
   }
 
@@ -81,6 +92,16 @@ export class NctableView extends MarkdownRenderChild {
     this.statusEl.className = "nct-status";
     this.statusEl.textContent = "已加载";
     this.containerEl.appendChild(this.statusEl);
+    const settings = (this.app as unknown as { plugins?: { plugins?: Record<string, { settings?: { showHints?: boolean } }> } }).plugins
+      ?.plugins?.["nested-canvas-tables"]?.settings;
+    if (settings?.showHints) {
+      const hint = document.createElement("div");
+      hint.className = "nct-hint";
+      hint.textContent = "悬停显示操作 · 右键设置格式 · 支持 ==荧光== **加粗**";
+      this.containerEl.appendChild(hint);
+      const timer = window.setTimeout(() => hint.classList.add("is-faded"), 6000);
+      this.register(() => window.clearTimeout(timer));
+    }
   }
 
   private signal(): AddEventListenerOptions {
@@ -175,14 +196,31 @@ export class NctableView extends MarkdownRenderChild {
   private buildCell(cell: Cell, table: Table, path: string[], ri: number, ci: number): HTMLElement {
     const td = document.createElement("td");
     td.className = "nct-cell-td";
+    td.dataset.cellId = cell.id;
+    td.style.background = bgTintCss(cell.style?.bg) ?? "";
 
     const text = document.createElement("div");
     text.className = "nct-cell";
     text.contentEditable = "plaintext-only";
-    text.textContent = cell.text;
+    this.paintCell(text, cell);
+    text.addEventListener("focus", () => {
+      text.textContent = cell.text;
+      text.style.color = textColorCss(cell.style?.color) ?? "";
+    }, this.signal());
+    text.addEventListener("blur", () => this.paintCell(text, cell), this.signal());
     text.addEventListener("input", () => {
       cell.text = text.textContent ?? "";
       this.scheduleSave();
+    }, this.signal());
+    text.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        text.blur();
+        return;
+      }
+      if (e.key === "Tab") {
+        e.preventDefault();
+        this.moveCellFocus(text, e.shiftKey ? -1 : 1);
+      }
     }, this.signal());
     td.appendChild(text);
 
@@ -210,6 +248,100 @@ export class NctableView extends MarkdownRenderChild {
     return td;
   }
 
+  // 失焦态渲染 markdown；聚焦态在 focus 监听里换回源码
+  private paintCell(el: HTMLElement, cell: Cell): void {
+    el.replaceChildren(renderInlineMarkdown(cell.text));
+    el.style.color = textColorCss(cell.style?.color) ?? "";
+  }
+
+  private moveCellFocus(current: HTMLElement, dir: number): void {
+    const cells = Array.from(this.containerEl.querySelectorAll<HTMLElement>(".nct-cell"));
+    const next = cells[cells.indexOf(current) + dir];
+    next?.focus();
+  }
+
+  private editorFor(cell: Cell): HTMLElement | null {
+    return this.containerEl.querySelector<HTMLElement>(`[data-cell-id="${cell.id}"] .nct-cell`);
+  }
+
+  private openCellMenu(cell: Cell, td: HTMLElement, e: MouseEvent): void {
+    const menu = new Menu();
+    menu.setUseNativeMenu(false);
+    for (const { token, label } of MD_TOKENS) {
+      menu.addItem((it) => it.setTitle(label).onClick(() => this.applyWrap(cell, token)));
+    }
+    menu.addSeparator();
+    for (const c of TEXT_COLORS) {
+      menu.addItem((it) =>
+        it.setTitle(`文字颜色：${c.label}`).setChecked(cell.style?.color === c.token).onClick(() => this.applyStyle(cell, td, { color: c.token })),
+      );
+    }
+    menu.addItem((it) => it.setTitle("文字颜色：默认").setChecked(!cell.style?.color).onClick(() => this.applyStyle(cell, td, { color: undefined })));
+    menu.addSeparator();
+    for (const b of BG_TINTS) {
+      menu.addItem((it) =>
+        it.setTitle(`底纹：${b.label}`).setChecked(cell.style?.bg === b.token).onClick(() => this.applyStyle(cell, td, { bg: b.token })),
+      );
+    }
+    menu.addItem((it) => it.setTitle("底纹：无").setChecked(!cell.style?.bg).onClick(() => this.applyStyle(cell, td, { bg: undefined })));
+    menu.addSeparator();
+    menu.addItem((it) => it.setTitle("清除格式").onClick(() => this.applyStyle(cell, td, { color: undefined, bg: undefined })));
+    menu.addItem((it) => it.setTitle("复制").onClick(() => void navigator.clipboard.writeText(cell.text)));
+    menu.addItem((it) =>
+      it.setTitle("粘贴").onClick(() => void navigator.clipboard.readText().then((t) => this.insertText(cell, t))),
+    );
+    menu.showAtMouseEvent(e);
+  }
+
+  private applyWrap(cell: Cell, token: string): void {
+    const editor = this.editorFor(cell);
+    if (!editor) return;
+    if (document.activeElement !== editor) editor.focus();
+    let start = cell.text.length;
+    let end = start;
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
+      const r = sel.getRangeAt(0);
+      start = Math.min(r.startOffset, cell.text.length);
+      end = Math.min(r.endOffset, cell.text.length);
+    }
+    const { text, caret } = wrapSelection(cell.text, start, end, token);
+    cell.text = text;
+    editor.textContent = text;
+    const node = editor.firstChild;
+    if (sel && node) {
+      const r = document.createRange();
+      r.setStart(node, Math.min(caret, text.length));
+      r.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(r);
+    }
+    this.scheduleSave();
+  }
+
+  private insertText(cell: Cell, str: string): void {
+    const editor = this.editorFor(cell);
+    if (!editor) return;
+    if (document.activeElement !== editor) editor.focus();
+    const sel = window.getSelection();
+    let at = cell.text.length;
+    if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) at = Math.min(sel.getRangeAt(0).startOffset, cell.text.length);
+    cell.text = cell.text.slice(0, at) + str + cell.text.slice(at);
+    editor.textContent = cell.text;
+    this.scheduleSave();
+  }
+
+  private applyStyle(cell: Cell, td: HTMLElement, patch: { color?: string; bg?: string }): void {
+    const next = { ...cell.style, ...patch };
+    for (const k of Object.keys(next) as (keyof typeof next)[]) if (next[k] === undefined) delete next[k];
+    if (Object.keys(next).length === 0) delete cell.style;
+    else cell.style = next;
+    td.style.background = bgTintCss(cell.style?.bg) ?? "";
+    const editor = this.editorFor(cell);
+    if (editor) editor.style.color = textColorCss(cell.style?.color) ?? "";
+    this.scheduleSave();
+  }
+
   private cellAtPath(path: string[]): Cell | null {
     if (!this.doc || path.length === 0) return null;
     let current: Table = this.doc;
@@ -225,6 +357,7 @@ export class NctableView extends MarkdownRenderChild {
 
   private scheduleSave(): void {
     if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
+    this.containerEl.querySelector(".nct-hint")?.classList.add("is-faded");
     this.setStatus("编辑中…");
     this.saveTimer = window.setTimeout(() => {
       this.saveTimer = null;
