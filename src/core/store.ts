@@ -1,5 +1,5 @@
 import { App, TFile } from "obsidian";
-import type { TableDocument } from "./model.ts";
+import { normalizeColumnHeaders, type TableDocument } from "./model.ts";
 import { parseDocument } from "./validate.ts";
 
 export type LoadResult = { ok: true; doc: TableDocument } | { ok: false; error: string };
@@ -18,6 +18,7 @@ export class TableStore {
     const raw = await this.app.vault.read(file);
     const parsed = parseDocument(raw);
     if (!parsed.ok) return parsed;
+    normalizeColumnHeaders(parsed.doc);
     this.lastWritten = raw;
     this.conflict = false;
     return { ok: true, doc: parsed.doc };

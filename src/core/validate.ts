@@ -27,12 +27,8 @@ function checkTable(value: unknown, ids: Set<string>, label: string): string | n
   if (ids.has(t.id)) return `${label} id 重复：${t.id}`;
   ids.add(t.id);
   if (typeof t.title !== "string") return `${label}缺少 title 字段`;
-  if (!Array.isArray(t.columns) || t.columns.length === 0 || t.columns.some((c) => typeof c !== "string" || c === "")) {
-    return `${label} columns 无效（至少一列，且均为非空字符串 id）`;
-  }
-  for (const c of t.columns) {
-    if (ids.has(c)) return `${label} 列 id 重复：${c}`;
-    ids.add(c);
+  if (!Array.isArray(t.columns) || t.columns.length === 0 || t.columns.some((c) => typeof c !== "string")) {
+    return `${label} columns 无效（至少一列，且均为字符串表头）`;
   }
   if (!Array.isArray(t.rows)) return `${label} rows 不是数组`;
   for (let i = 0; i < t.rows.length; i++) {

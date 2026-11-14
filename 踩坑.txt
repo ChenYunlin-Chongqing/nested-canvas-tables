@@ -34,4 +34,13 @@
 【插件热重载缓存】
 - app.plugins.disablePlugin → enablePlugin 会重新注入 styles.css，但不一定刷新 main.js 的模块缓存：可能出现「新 CSS 生效、旧 DOM class 仍在」的半新半旧状态。改渲染逻辑后须整窗重载（location.reload()）清模块缓存，再 rebuildView，否则验收看到的是旧代码。
 
+【OneNote 式文档表格（去按钮墙二期）】
+- 用户参照 OneNote 医学表格：要有意义的可编辑列名（病史/症状/体征/检查）、嵌套子表是带自己表头的真实表格、阅读态无任何标题栏与按钮。据此把 columns 从「col_id 唯一标识」改为「可编辑表头文字」（默认 列 N），删除按索引；旧 col_id 数据在 store.load 时经 normalizeColumnHeaders 递归迁移为 列 N，校验放宽为「至少一列、均为字符串」（允许空/重名表头）。
+- 去掉 .nct-title 标题栏与常驻工具栏：工具栏改 position:absolute 浮于表格右上角，默认 opacity:0，仅 :hover/:focus-within 浮现；表头用主题变量 --background-secondary-alt 填充底色适配明暗主题，不硬编码颜色。
+- 单元格富文本（高亮/彩色小节头）属更大特性，本轮不做，保持纯文本 contenteditable。
+
+【CDP 验证：画布隐藏重复渲染】
+- 一个 canvas 文件节点在 DOM 里可能对应多个 .nct-wrap（Obsidian 内部保留隐藏副本），querySelectorAll 会把隐藏副本与嵌套子表一起算进去，导致「列名数量/迁移」断言误报。验证时整窗重载后取首个 wrap，且根表头用 `> .nct-table-block > .nct-table > thead .nct-colhead` 限定（子表在根表单元格内，属后代，须用 >thead 排除）；可见性以截图为准（用户只见单表）。
+- 自动保存防抖 600ms：创建/编辑后读盘断言须等 ≥900ms，否则读到旧值误判「未持久化」。
+
 （后续踩坑随开发追加）

@@ -7,6 +7,7 @@ import {
   createTable,
   findCell,
   hasContent,
+  normalizeColumnHeaders,
   removeColumn,
   removeRow,
   tableAtPath,
@@ -33,9 +34,8 @@ test("新增行/列后所有行单元格数仍与列数一致", () => {
 test("删除行/列同步移除对应单元格", () => {
   const t = createTable("t", 3, 3);
   const rowId = t.rows[1].id;
-  const colId = t.columns[1];
   removeRow(t, rowId);
-  removeColumn(t, colId);
+  removeColumn(t, 1);
   assert.equal(t.rows.length, 2);
   assert.equal(t.columns.length, 2);
   assert.ok(!t.rows.some((r) => r.id === rowId));
@@ -45,7 +45,7 @@ test("删除行/列同步移除对应单元格", () => {
 test("至少保留一行一列", () => {
   const t = createTable("t", 1, 1);
   assert.throws(() => removeRow(t, t.rows[0].id), /至少保留一行/);
-  assert.throws(() => removeColumn(t, t.columns[0]), /至少保留一列/);
+  assert.throws(() => removeColumn(t, 0), /至少保留一列/);
 });
 
 test("三层递归嵌套：tableAtPath 逐级定位，findCell 跨层查找", () => {
@@ -79,7 +79,7 @@ test("所有 id 唯一且序列化往返一致", () => {
   doc.rows[0].cells[0].childTable = createTable("子", 2, 2);
   const ids: string[] = [];
   const walk = (t: Table) => {
-    ids.push(t.id, ...t.columns);
+    ids.push(t.id);
     for (const r of t.rows) {
       ids.push(r.id);
       for (const c of r.cells) {
@@ -91,4 +91,26 @@ test("所有 id 唯一且序列化往返一致", () => {
   walk(doc);
   assert.equal(new Set(ids).size, ids.length);
   assert.deepEqual(JSON.parse(JSON.stringify(doc)), doc);
+});
+
+test("列名为可编辑文字：默认列 N、可改名、按索引删除", () => {
+  const t = createTable("t", 2, 1);
+  assert.deepEqual(t.columns, ["列 1", "列 2"]);
+  t.columns[0] = "病史";
+  addColumn(t);
+  assert.deepEqual(t.columns, ["病史", "列 2", "列 3"]);
+  removeColumn(t, 0);
+  assert.deepEqual(t.columns, ["列 2", "列 3"]);
+  assert.equal(t.rows[0].cells.length, 2);
+});
+
+test("旧 col_id 表头迁移为列 N（含递归子表）", () => {
+  const t = createTable("t", 2, 1);
+  t.columns = ["col_aaaa", "col_bbbb"];
+  const child = createTable("子", 1, 1);
+  child.columns = ["col_cccc"];
+  t.rows[0].cells[0].childTable = child;
+  normalizeColumnHeaders(t);
+  assert.deepEqual(t.columns, ["列 1", "列 2"]);
+  assert.deepEqual(child.columns, ["列 1"]);
 });

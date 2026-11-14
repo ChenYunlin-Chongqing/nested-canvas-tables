@@ -36,7 +36,7 @@ export function createTable(title: string, columnCount = 3, rowCount = 2): Table
   return {
     id: newId("table"),
     title,
-    columns: Array.from({ length: columnCount }, () => newId("col")),
+    columns: Array.from({ length: columnCount }, (_, i) => `列 ${i + 1}`),
     rows: Array.from({ length: rowCount }, () => createRow(columnCount)),
   };
 }
@@ -52,10 +52,10 @@ export function addRow(table: Table): Row {
 }
 
 export function addColumn(table: Table): string {
-  const id = newId("col");
-  table.columns.push(id);
+  const header = `列 ${table.columns.length + 1}`;
+  table.columns.push(header);
   for (const row of table.rows) row.cells.push(createCell());
-  return id;
+  return header;
 }
 
 export function removeRow(table: Table, rowId: string): void {
@@ -65,10 +65,9 @@ export function removeRow(table: Table, rowId: string): void {
   table.rows.splice(index, 1);
 }
 
-export function removeColumn(table: Table, columnId: string): void {
+export function removeColumn(table: Table, index: number): void {
   if (table.columns.length <= 1) throw new Error("至少保留一列");
-  const index = table.columns.indexOf(columnId);
-  if (index < 0) throw new Error("列不存在");
+  if (index < 0 || index >= table.columns.length) throw new Error("列不存在");
   table.columns.splice(index, 1);
   for (const row of table.rows) row.cells.splice(index, 1);
 }
@@ -101,4 +100,14 @@ export function hasContent(table: Table): boolean {
   return table.rows.some((row) =>
     row.cells.some((cell) => cell.text.trim() !== "" || (cell.childTable ? hasContent(cell.childTable) : false)),
   );
+}
+
+// 旧版 columns 存的是 col_<uuid> 内部 ID；升级为可编辑表头文字时归一化为「列 N」
+export function normalizeColumnHeaders(table: Table): void {
+  table.columns = table.columns.map((c, i) => (/^col_[0-9a-f-]+$/i.test(c) ? `列 ${i + 1}` : c));
+  for (const row of table.rows) {
+    for (const cell of row.cells) {
+      if (cell.childTable) normalizeColumnHeaders(cell.childTable);
+    }
+  }
 }

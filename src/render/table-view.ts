@@ -102,15 +102,11 @@ export class NctableView extends MarkdownRenderChild {
 
     const toolbar = document.createElement("div");
     toolbar.className = "nct-toolbar";
-    const title = document.createElement("span");
-    title.className = "nct-title";
-    title.textContent = table.title;
-    toolbar.appendChild(title);
     toolbar.appendChild(this.button("+ 行", "", () => { addRow(table); this.render(); this.scheduleSave(); }));
     toolbar.appendChild(this.button("+ 列", "", () => { addColumn(table); this.render(); this.scheduleSave(); }));
     if (isChild) {
       toolbar.appendChild(this.button("删除子表", "nct-danger", () => {
-        if (hasContent(table) && !window.confirm(`删除子表格「${table.title}」及其全部内容，确定？`)) return;
+        if (hasContent(table) && !window.confirm("删除此子表格及其全部内容，确定？")) return;
         const parentCell = this.cellAtPath(path);
         if (parentCell) delete parentCell.childTable;
         this.render();
@@ -123,15 +119,21 @@ export class NctableView extends MarkdownRenderChild {
     tableEl.className = "nct-table";
     const thead = document.createElement("thead");
     const headRow = document.createElement("tr");
-    table.columns.forEach((colId, i) => {
+    table.columns.forEach((header, i) => {
       const th = document.createElement("th");
-      const label = document.createElement("span");
-      label.textContent = `列 ${i + 1}`;
-      th.appendChild(label);
+      const head = document.createElement("span");
+      head.className = "nct-colhead";
+      head.contentEditable = "plaintext-only";
+      head.textContent = header;
+      head.addEventListener("input", () => {
+        table.columns[i] = head.textContent ?? "";
+        this.scheduleSave();
+      }, this.signal());
+      th.appendChild(head);
       const del = this.button("×", "nct-del", () => {
         const occupied = table.rows.some((r) => { const c = r.cells[i]; return c.text.trim() !== "" || !!c.childTable; });
-        if (occupied && !window.confirm(`删除第 ${i + 1} 列将同时删除该列所有单元格内容（含子表格），确定？`)) return;
-        removeColumn(table, colId);
+        if (occupied && !window.confirm(`删除「${table.columns[i] || `列 ${i + 1}`}」将同时删除该列所有单元格内容（含子表格），确定？`)) return;
+        removeColumn(table, i);
         this.render();
         this.scheduleSave();
       });
