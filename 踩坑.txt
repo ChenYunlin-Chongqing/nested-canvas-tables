@@ -1,0 +1,11 @@
+嵌套表格插件开发踩坑记录
+================================
+
+【路径映射】规格书原写 Windows 路径 D:\Codex work；本机为 macOS，经用户确认映射到
+~/Documents/EthanforCareer-runtime/ObsidianPlugins/nested-canvas-tables/（与 reminder-calendar 同级，沿用本机插件开发惯例）。
+测试库：同级 nctable-test-vault/（独立 Vault，不动 EthanforCareer 知识库）。
+
+【工具链】沿用 reminder-calendar：esbuild + TypeScript + node --test；不引 Svelte（纯 DOM 渲染，规格第 6 条）。
+构建产物目录优先级：NCT_OUT 环境变量 > dev.config.json（gitignored）> ./dist。
+
+（后续踩坑随开发追加）

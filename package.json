@@ -1,0 +1,21 @@
+{
+  "name": "nested-canvas-tables",
+  "version": "0.1.0",
+  "description": "Editable recursive nested tables on Obsidian native Canvas via Markdown cards. 原生画布上的递归嵌套表格卡片",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node esbuild.config.mjs --production",
+    "dev": "node esbuild.config.mjs --watch",
+    "test": "node --test",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "builtin-modules": "^5.4.0",
+    "esbuild": "^0.25.12",
+    "obsidian": "^1.14.4",
+    "tslib": "^2.8.1",
+    "typescript": "^6.0.3"
+  }
+}

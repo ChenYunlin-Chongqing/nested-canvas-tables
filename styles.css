@@ -1,0 +1,65 @@
+.nct-wrap {
+  padding: 4px;
+}
+
+.nct-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: var(--font-ui-small);
+}
+
+.nct-table th,
+.nct-table td {
+  border: 1px solid var(--background-modifier-border);
+  padding: 4px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.nct-table th {
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.nct-cell {
+  min-width: 60px;
+  min-height: 1.4em;
+  outline: none;
+  cursor: text;
+}
+
+.nct-cell:focus {
+  background: var(--background-modifier-hover);
+}
+
+.nct-status {
+  margin-top: 4px;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+.nct-error {
+  padding: 8px;
+  border: 1px solid var(--background-modifier-error);
+  border-radius: var(--radius-s);
+  color: var(--text-error);
+  font-size: var(--font-ui-small);
+  white-space: pre-wrap;
+}
+
+.nct-conflict {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--background-modifier-error);
+  border-radius: var(--radius-s);
+  color: var(--text-error);
+  font-size: var(--font-ui-small);
+}
+
+.nct-conflict button {
+  font-size: var(--font-ui-smaller);
+}
