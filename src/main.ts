@@ -1,5 +1,5 @@
 import { Notice, Plugin } from "obsidian";
-import { createCanvasWithTable, createTableCard } from "./commands.ts";
+import { createCanvasWithTable, createTableCard, createTableData, nctableBlock, quickCreateTable } from "./commands.ts";
 import { openDemo, runTour } from "./onboarding.ts";
 import { NctableView } from "./render/table-view.ts";
 import { DEFAULT_SETTINGS, NctSettings, NctSettingTab } from "./settings.ts";
@@ -12,8 +12,40 @@ export default class NestedCanvasTablesPlugin extends Plugin {
     this.addSettingTab(new NctSettingTab(this.app, this));
 
     this.registerMarkdownCodeBlockProcessor("nctable", (source, el, ctx) => {
-      ctx.addChild(new NctableView(this.app, source, el));
+      ctx.addChild(new NctableView(this.app, source, el, ctx.sourcePath));
     });
+
+    const ribbon = this.addRibbonIcon("table", "一键新建嵌套表格", () => {
+      void quickCreateTable(this.app, this.settings.rootDir)
+        .then((msg) => new Notice(msg))
+        .catch((e) => new Notice(`新建表格失败：${e instanceof Error ? e.message : String(e)}`));
+    });
+    ribbon.addClass("nct-ribbon");
+
+    this.addCommand({
+      id: "quick-create",
+      name: "一键新建嵌套表格",
+      callback: () => {
+        void quickCreateTable(this.app, this.settings.rootDir)
+          .then((msg) => new Notice(msg))
+          .catch((e) => new Notice(`新建表格失败：${e instanceof Error ? e.message : String(e)}`));
+      },
+    });
+
+    this.registerEvent(
+      this.app.workspace.on("editor-menu", (menu, editor) => {
+        menu.addItem((it) =>
+          it
+            .setTitle("插入嵌套表格")
+            .setIcon("table")
+            .onClick(() => {
+              void createTableData(this.app, this.settings.rootDir)
+                .then((dataPath) => editor.replaceSelection(nctableBlock(dataPath)))
+                .catch((e) => new Notice(`插入表格失败：${e instanceof Error ? e.message : String(e)}`));
+            }),
+        );
+      }),
+    );
 
     this.addCommand({
       id: "create-canvas-with-table",

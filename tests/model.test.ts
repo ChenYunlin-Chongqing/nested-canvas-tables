@@ -124,3 +124,19 @@ test("增删列同步维护 columnStyles 对齐", () => {
   assert.deepEqual(t.columnStyles, [null, null]);
   assert.equal(t.columnStyles.length, t.columns.length);
 });
+
+test("增删行列同步维护 columnWidths/rowHeights 对齐", () => {
+  const t = createTable("t", 2, 2);
+  t.columnWidths = [120, null];
+  t.rowHeights = [40, null];
+  addColumn(t);
+  addRow(t);
+  assert.deepEqual(t.columnWidths, [120, null, null]);
+  assert.deepEqual(t.rowHeights, [40, null, null]);
+  removeColumn(t, 0);
+  removeRow(t, t.rows[0].id);
+  assert.deepEqual(t.columnWidths, [null, null]);
+  assert.deepEqual(t.rowHeights, [null, null]);
+  assert.equal(t.columnWidths.length, t.columns.length);
+  assert.equal(t.rowHeights.length, t.rows.length);
+});

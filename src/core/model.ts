@@ -18,6 +18,9 @@ export interface Table {
   columns: string[];
   // 与 columns 等长的表头样式（null 表示无），缺省整体省略
   columnStyles?: (CellStyle | null)[];
+  // 拖拽设定的列宽/行高（px，null 表示随内容），缺省整体省略
+  columnWidths?: (number | null)[];
+  rowHeights?: (number | null)[];
   rows: Row[];
 }
 
@@ -53,6 +56,7 @@ export function createDocument(title: string): TableDocument {
 export function addRow(table: Table): Row {
   const row = createRow(table.columns.length);
   table.rows.push(row);
+  table.rowHeights?.push(null);
   return row;
 }
 
@@ -60,6 +64,7 @@ export function addColumn(table: Table): string {
   const header = `列 ${table.columns.length + 1}`;
   table.columns.push(header);
   table.columnStyles?.push(null);
+  table.columnWidths?.push(null);
   for (const row of table.rows) row.cells.push(createCell());
   return header;
 }
@@ -69,6 +74,7 @@ export function removeRow(table: Table, rowId: string): void {
   const index = table.rows.findIndex((r) => r.id === rowId);
   if (index < 0) throw new Error("行不存在");
   table.rows.splice(index, 1);
+  table.rowHeights?.splice(index, 1);
 }
 
 export function removeColumn(table: Table, index: number): void {
@@ -76,6 +82,7 @@ export function removeColumn(table: Table, index: number): void {
   if (index < 0 || index >= table.columns.length) throw new Error("列不存在");
   table.columns.splice(index, 1);
   table.columnStyles?.splice(index, 1);
+  table.columnWidths?.splice(index, 1);
   for (const row of table.rows) row.cells.splice(index, 1);
 }
 

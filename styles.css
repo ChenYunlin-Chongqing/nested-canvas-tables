@@ -8,18 +8,18 @@
 }
 
 .nct-table-block.nct-child {
-  margin-top: 6px;
-  padding: 6px;
+  padding: 4px;
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-s);
   background: var(--background-primary);
 }
 
-/* 浮动工具栏：默认隐藏，悬停/聚焦到本表格才浮现，不占阅读空间 */
+/* 浮动工具栏：默认隐藏，悬停/聚焦到本表格才浮现，不占阅读空间；
+   置于表格上方，避免盖住表头右缘的列宽拖拽手柄 */
 .nct-toolbar {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: -28px;
+  right: 0;
   z-index: 6;
   display: flex;
   gap: 4px;
@@ -64,36 +64,65 @@
 
 .nct-btn.nct-del {
   padding: 0 5px;
-  margin-left: 6px;
   line-height: 1.4;
   color: var(--text-muted);
 }
 
-.nct-btn.nct-toggle,
-.nct-btn.nct-addchild {
-  border-style: dashed;
-  color: var(--text-muted);
+/* 横向滚动容器：表格超宽时滚动而非撑破卡片；滚动条用主题色 */
+.nct-table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
 }
 
+.nct-table-scroll::-webkit-scrollbar,
+.nct-cell-box::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.nct-table-scroll::-webkit-scrollbar-track,
+.nct-cell-box::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nct-table-scroll::-webkit-scrollbar-thumb,
+.nct-cell-box::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 4px;
+}
+
+.nct-table-scroll::-webkit-scrollbar-thumb:hover,
+.nct-cell-box::-webkit-scrollbar-thumb:hover {
+  background: var(--interactive-accent);
+}
+
+/* 内容自适应：无拖拽宽度时表格随内容收缩，不拉伸占满 */
 .nct-table {
   border-collapse: collapse;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   font-size: var(--font-ui-small);
 }
 
 .nct-table th,
 .nct-table td {
   border: 1px solid var(--background-modifier-border);
-  padding: 4px 8px;
   text-align: left;
   vertical-align: top;
+  box-sizing: border-box;
 }
 
-/* 表头：主题适配的填充底色 + 可编辑列名，近似 OneNote 文档表格 */
 .nct-table th {
+  position: relative;
+  padding: 4px 8px;
   background: var(--background-secondary-alt, var(--background-secondary));
   color: var(--text-normal);
   font-weight: 600;
+}
+
+.nct-table td {
+  position: relative;
+  padding: 0;
 }
 
 .nct-colhead {
@@ -110,11 +139,12 @@
   border-radius: var(--radius-s);
 }
 
-.nct-rowdel-col {
-  width: 24px;
-  text-align: center;
-  border: none !important;
-  background: transparent !important;
+/* 单元格内容盒：行高拖拽时定高 + 内部滚动 */
+.nct-cell-box {
+  position: relative;
+  padding: 4px 8px;
+  box-sizing: border-box;
+  min-height: 1.6em;
 }
 
 .nct-cell {
@@ -131,7 +161,11 @@
 }
 
 .nct-cell-child {
-  margin-top: 4px;
+  position: relative;
+}
+
+.nct-cell-child.nct-has-child {
+  margin-top: 10px;
 }
 
 .nct-status {
@@ -165,50 +199,136 @@
   font-size: var(--font-ui-smaller);
 }
 
-/* 阅读优先：行/列删除与折叠控件默认隐藏，悬停/聚焦到对应区域才浮现 */
-.nct-table th .nct-del,
-.nct-table tbody tr .nct-del,
-.nct-btn.nct-toggle {
+/* 阅读优先：所有操作控件绝对定位悬浮，不占布局空间 */
+.nct-col-del {
+  position: absolute;
+  top: 2px;
+  right: 8px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.12s ease;
 }
 
-.nct-table th:hover .nct-del,
-.nct-table th:focus-within .nct-del,
-.nct-table tbody tr:hover .nct-del,
-.nct-table tbody tr:focus-within .nct-del,
-.nct-cell-td:hover .nct-toggle,
-.nct-cell-td:focus-within .nct-toggle {
+.nct-row-del {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 4;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.nct-table th:hover .nct-col-del,
+.nct-table th:focus-within .nct-col-del,
+.nct-table tbody tr:hover .nct-row-del,
+.nct-table tbody tr:focus-within .nct-row-del {
   opacity: 1;
   pointer-events: auto;
 }
 
-/* 折叠态常驻一个小标记，便于发现被收起的子表 */
-.nct-btn.nct-toggle.is-collapsed {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.nct-btn.nct-toggle {
+/* 折叠/展开与 +子表：悬浮小 chip，折叠态常驻便于发现 */
+.nct-toggle {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  z-index: 5;
   padding: 1px 6px;
   font-size: var(--font-ui-smaller);
-}
-
-/* 无子表的单元格不预留按钮空位，悬停时才展开 +子表 */
-.nct-cell-child.nct-empty-child {
-  max-height: 0;
-  margin-top: 0;
-  overflow: hidden;
+  border-style: dashed;
+  color: var(--text-muted);
   opacity: 0;
-  transition: max-height 0.12s ease, opacity 0.12s ease;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
 }
 
-.nct-cell-td:hover .nct-cell-child.nct-empty-child,
-.nct-cell-td:focus-within .nct-cell-child.nct-empty-child {
-  max-height: 40px;
-  margin-top: 4px;
+.nct-child-chip {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  z-index: 4;
+  padding: 1px 6px;
+  font-size: var(--font-ui-smaller);
+  border-style: dashed;
+  color: var(--text-muted);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.nct-cell-td:hover .nct-toggle,
+.nct-cell-td:focus-within .nct-toggle,
+.nct-cell-td:hover .nct-child-chip,
+.nct-cell-td:focus-within .nct-child-chip {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.nct-child-chip.is-collapsed {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 行列拖拽手柄：贴边 6px，悬停/拖动时显示主题色导线 */
+.nct-col-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 5;
+}
+
+.nct-col-resize::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 2px;
+  width: 2px;
+  background: transparent;
+}
+
+.nct-row-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 6px;
+  cursor: row-resize;
+  z-index: 3;
+}
+
+.nct-row-resize::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2px;
+  height: 2px;
+  background: transparent;
+}
+
+.nct-table th:hover .nct-col-resize::after,
+.nct-col-resize:hover::after,
+.nct-col-resize.is-active::after,
+.nct-table tbody tr:hover .nct-row-resize::after,
+.nct-row-resize:hover::after,
+.nct-row-resize.is-active::after {
+  background: var(--interactive-accent);
+}
+
+body.nct-resizing-col,
+body.nct-resizing-col * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+body.nct-resizing-row,
+body.nct-resizing-row * {
+  cursor: row-resize !important;
+  user-select: none !important;
 }
 
 /* 一次性渐隐提示条：不挡输入 */
@@ -236,6 +356,23 @@
   color: inherit;
   border-radius: 2px;
   padding: 0 2px;
+}
+
+.nct-img {
+  display: block;
+  max-width: 100%;
+  margin: 2px 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+}
+
+.nct-img-missing {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
 }
 
 /* 新手 coach-mark 浮层与高亮环 */

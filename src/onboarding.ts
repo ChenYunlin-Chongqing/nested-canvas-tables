@@ -48,13 +48,14 @@ interface Step {
 }
 
 const STEPS: Step[] = [
+  { target: ".nct-ribbon", text: "左侧栏表格图标：一键新建（画布加节点 / 笔记光标处插入 / 新开卡片）。" },
   { target: ".canvas-node", text: "这是表格卡片：点击节点聚焦后即可编辑。" },
   { target: ".nct-cell", text: "点击单元格输入文字；编辑时显示 markdown 源码。" },
-  { target: ".nct-toolbar", text: "悬停表格右上角浮现工具栏：+行 / +列 / 删除子表。" },
-  { target: ".nct-cell", text: "右键单元格打开格式菜单：加粗 / 荧光 / 底纹 / 颜色。" },
-  { target: ".nct-cell", text: "输入 ==荧光== 或 **加粗**，失焦即渲染。" },
-  { target: ".nct-addchild", text: "悬停单元格点 +子表，得到嵌套子表。" },
-  { target: ".nct-toggle", text: "点 ▼ / ▶ 折叠或展开子表。" },
+  { target: ".nct-cell", text: "右键格式菜单：先选中文字再改颜色，只染选中部分。" },
+  { target: ".nct-cell", text: "输入 ==荧光== 或 **加粗**，失焦即渲染，可互相嵌套。" },
+  { target: ".nct-col-resize", text: "拖表头右缘调列宽、行底缘调行高；双击恢复自适应。" },
+  { target: ".nct-child-chip", text: "悬停单元格点 +子表 嵌套；图片可直接粘贴或拖入格子。" },
+  { target: ".nct-toolbar", text: "悬停表格右上浮现 +行 / +列；所有按钮悬浮不占位置。" },
   { target: ".nct-status", text: "自动保存；数据被外部修改会停写并提示。" },
   { target: "", text: "完成！可随时用命令「使用引导」重看。" },
 ];

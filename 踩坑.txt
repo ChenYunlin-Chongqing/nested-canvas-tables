@@ -64,4 +64,14 @@
 - 修复：① 落点限定——target.closest(".nct-table-block") 必须等于 td.closest(".nct-table-block")，否则不弹格式菜单（嵌套 chrome 不穿透）；按钮右键一律留给原生菜单。② 列头独立菜单——.nct-colhead 带 data-col、表块带 data-path（JSON 路径），经 tableAtPath 定位所属表；表头样式存 Table.columnStyles（与 columns 等长、null 占位、全 null 时整体删除），addColumn/removeColumn 同步 push/splice，validate 校验长度与 token。表头不渲染 markdown，菜单只含颜色/底纹/清除/复制/粘贴。
 - 验收：表头橙/底纹落 columnStyles 且 th 生效、父格 style 不变；清除回收；子表格/父格菜单回归；工具栏右键不弹格式菜单。9 项实机 PASS。
 
+【选区变色/悬浮控件/行列拖拽/图片/一键新建（#10–#14，2026-11-15）】
+- 变色只染选区：wrapSelectionColor 把选区包成 <span style="color:#RRGGBB"> 存源码；解析器升级为递归嵌套（深度封顶 12、span 颜色白名单、代码/图片作叶子），覆盖旧「不嵌套」说法。渲染态拖选会触发 focus→源码换态摧毁选区：focus 监听先记住选中可见文字，换态后按 indexOf 恢复选区，保证「选哪染哪」。
+- Canvas 靠**冒泡期 click** 进入节点编辑态；编辑态下真实 pointerdown 落在非聚焦区域（拖拽手柄）会被焦点代理显式夺焦（activeElement 变 embed-iframe is-controlled），预览整体折叠成 0×0。对策：容器冒泡阻断清单加入 click/keydown——表格自身即编辑面，表内点击不进入节点编辑态，CodeMirror 也拿不到 keydown 改源码。节点拖动仍留给标题区。
+- Canvas **双击文件节点会在新标签打开文件**（画布隐藏、几何全 0）。验收解除 blocker 用两次单击（首击选中节点、次击进入内容聚焦），别用双击。合成 dblclick 同样不能冒泡到节点（手柄自身 handler 已 stopPropagation）。
+- rebuildView 会在 DOM 留下隐藏旧视图实例，节点含相同文本：querySelector 首匹配命中隐藏实例（rect 全 0、选区 toString 空）。验收查询一律先按 getBoundingClientRect().width>0 选可见节点；setup 打开文件后别多余 rebuildView。
+- 列宽混合 null 语义：双击重置后该列 null。fixed 与 null 并存时用 auto 布局 + 仅非 null 列写 th width（重置列真自适应）；全非 null→fixed+总宽；全 null→回收数组。旧「null 回退 120px」会让重置看似无效。
+- insertText 焦点兜底：插入后若 document.activeElement 不是编辑器（画布未编辑态焦点被夺），直接 paintCell 渲染，粘贴图片立即可见、不裸露源码。
+- 验收脚本开头必须 disable/enable 插件加载最新构建，否则断言旧代码（提示条文案等）；提示条/几何断言限定可见节点，避开隐藏旧视图。
+- 一键新建三分支：画布 active→vault.process 右侧追加节点（x=maxRight+60）；MarkdownView→editor.replaceSelection 插代码块；其余→新开卡片并打开。ribbon/命令/编辑器菜单共用 quickCreateTable/createTableData。
+
 （后续踩坑随开发追加）

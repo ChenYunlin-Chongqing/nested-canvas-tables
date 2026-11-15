@@ -68,6 +68,23 @@ test("合法整格 style 通过、坏 style 被拒绝", () => {
   if (!res.ok) assert.match(res.error, /color/);
 });
 
+test("columnWidths/rowHeights：null 与合法数字通过、长度不符与非法值被拒绝", () => {
+  const good = createDocument("sizes");
+  good.columnWidths = [120, null, null];
+  good.rowHeights = [null, 60];
+  assert.equal(parseDocument(JSON.stringify(good)).ok, true);
+  const badLen = createDocument("badlen");
+  badLen.columnWidths = [120];
+  const r1 = parseDocument(JSON.stringify(badLen));
+  assert.equal(r1.ok, false);
+  if (!r1.ok) assert.match(r1.error, /columnWidths 与列数不一致/);
+  const badVal = createDocument("badval");
+  badVal.rowHeights = [10, null];
+  const r2 = parseDocument(JSON.stringify(badVal));
+  assert.equal(r2.ok, false);
+  if (!r2.ok) assert.match(r2.error, /非法尺寸/);
+});
+
 test("表头 columnStyles：null 与合法 token 通过、坏 token 与长度不符被拒绝", () => {
   const good = createDocument("headstyle");
   good.columnStyles = [null, { color: "orange" }, { bg: "tint-5" }];

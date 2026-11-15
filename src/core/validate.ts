@@ -40,10 +40,25 @@ function checkTable(value: unknown, ids: Set<string>, label: string): string | n
       if (styleError) return `${label}第 ${i + 1} 列表头 ${styleError}`;
     }
   }
+  const widthError = checkSizeArray(t.columnWidths, t.columns.length, `${label} columnWidths 与列数不一致`, `${label} columnWidths`);
+  if (widthError) return widthError;
   if (!Array.isArray(t.rows)) return `${label} rows 不是数组`;
+  const heightError = checkSizeArray(t.rowHeights, t.rows.length, `${label} rowHeights 与行数不一致`, `${label} rowHeights`);
+  if (heightError) return heightError;
   for (let i = 0; i < t.rows.length; i++) {
     const error = checkRow(t.rows[i], t.columns.length, ids, `${label}第 ${i + 1} 行`);
     if (error) return error;
+  }
+  return null;
+}
+
+function checkSizeArray(value: unknown, len: number, mismatchError: string, label: string): string | null {
+  if (value === undefined) return null;
+  if (!Array.isArray(value) || value.length !== len) return mismatchError;
+  for (const v of value) {
+    if (v !== null && (typeof v !== "number" || !Number.isFinite(v) || v < 20)) {
+      return `${label} 含非法尺寸（须为 null 或 ≥20 的数字）`;
+    }
   }
   return null;
 }
