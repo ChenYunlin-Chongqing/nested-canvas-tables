@@ -1,4 +1,4 @@
-import { App, MarkdownRenderChild, Menu, TFile } from "obsidian";
+import { App, MarkdownRenderChild, Menu, Scope, TFile } from "obsidian";
 import {
   addColumn,
   addRow,
@@ -14,9 +14,10 @@ import {
 } from "../core/model.ts";
 import {
   MD_TOKENS,
+  TOOLBAR_FORMAT_COMMANDS,
   renderInlineMarkdown,
   stripColorSpans,
-  wrapSelection,
+  toggleWrap,
   wrapSelectionColor,
 } from "../core/markdown.ts";
 import { BG_TINTS, TEXT_COLORS, bgTintCss, textColorCss } from "../core/style.ts";
@@ -38,6 +39,9 @@ export class NctableView extends MarkdownRenderChild {
   private statusEl: HTMLElement | null = null;
   private collapsed = new Set<string>();
   private renderAbort: AbortController | null = null;
+  private tracked: { cell: Cell; start: number; end: number; at: number } | null = null;
+  private formatScope: Scope | null = null;
+  private scopePushed = false;
 
   constructor(private app: App, private source: string, containerEl: HTMLElement, private sourcePath = "") {
     super(containerEl);
@@ -49,6 +53,14 @@ export class NctableView extends MarkdownRenderChild {
     for (const type of ["pointerdown", "mousedown", "touchstart", "dblclick", "click", "keydown"] as const) {
       this.registerDomEvent(this.containerEl, type, (e) => e.stopPropagation());
     }
+    // 工具栏按钮点击会夺焦：持续记录单元格选区的源码偏移，供 Editing Toolbar 接管时使用
+    this.registerDomEvent(document, "selectionchange", () => this.trackSelection());
+    // Obsidian 全局快捷键在 window capture 层拦截 Mod+B/I，格内 keydown 收不到；
+    // 用 Scope 栈在单元格聚焦期间置顶接管，失焦即弹出，笔记/编辑器场景不受影响。
+    this.formatScope = new Scope();
+    this.formatScope.register(["Mod"], "b", () => this.wrapFocusedCell("**"));
+    this.formatScope.register(["Mod"], "i", () => this.wrapFocusedCell("*"));
+    this.register(() => this.popFormatScope());
     this.registerDomEvent(this.containerEl, "contextmenu", (e) => {
       if (!this.doc) return;
       const target = e.target as HTMLElement;
@@ -124,6 +136,7 @@ export class NctableView extends MarkdownRenderChild {
   private render(): void {
     this.renderAbort?.abort();
     this.renderAbort = new AbortController();
+    this.popFormatScope();
     this.containerEl.empty();
     this.containerEl.addClass("nct-wrap");
     if (!this.doc) return;
@@ -361,6 +374,10 @@ export class NctableView extends MarkdownRenderChild {
     text.contentEditable = "plaintext-only";
     this.paintCell(text, cell);
     text.addEventListener("focus", () => {
+      if (!this.scopePushed && this.formatScope) {
+        this.app.keymap.pushScope(this.formatScope);
+        this.scopePushed = true;
+      }
       // 渲染态拖选会触发 focus：换源码前记住选中的可见文字，换后恢复选区，保证「选哪染哪」
       const sel = window.getSelection();
       let restore: { start: number; end: number } | null = null;
@@ -384,7 +401,10 @@ export class NctableView extends MarkdownRenderChild {
         }
       }
     }, this.signal());
-    text.addEventListener("blur", () => this.paintCell(text, cell), this.signal());
+    text.addEventListener("blur", () => {
+      this.popFormatScope();
+      this.paintCell(text, cell);
+    }, this.signal());
     text.addEventListener("input", () => {
       cell.text = text.textContent ?? "";
       this.scheduleSave();
@@ -397,6 +417,7 @@ export class NctableView extends MarkdownRenderChild {
       if (e.key === "Tab") {
         e.preventDefault();
         this.moveCellFocus(text, e.shiftKey ? -1 : 1);
+        return;
       }
     }, this.signal());
     text.addEventListener("paste", (e) => {
@@ -500,16 +521,19 @@ export class NctableView extends MarkdownRenderChild {
   }
 
   private openCellMenu(cell: Cell, td: HTMLElement, e: MouseEvent): void {
+    // 菜单项的真实点击会夺焦并折叠选区：选区偏移必须在开菜单这一刻捕获
+    const editor = this.editorFor(cell);
+    const captured = editor ? this.renderedSelectionRange(cell, editor) : null;
     const menu = new Menu();
     menu.setUseNativeMenu(false);
     for (const { token, label } of MD_TOKENS) {
-      menu.addItem((it) => it.setTitle(label).setIcon(TOKEN_ICONS[token]).onClick(() => this.applyWrap(cell, token)));
+      menu.addItem((it) => it.setTitle(label).setIcon(TOKEN_ICONS[token]).onClick(() => this.applyWrap(cell, token, captured)));
     }
     menu.addSeparator();
     for (const c of TEXT_COLORS) {
-      menu.addItem((it) => it.setTitle(`文字颜色：${c.label}（选中文字）`).onClick(() => this.applyColor(cell, td, c.css)));
+      menu.addItem((it) => it.setTitle(`文字颜色：${c.label}（选中文字）`).onClick(() => this.applyColor(cell, td, c.css, captured)));
     }
-    menu.addItem((it) => it.setTitle("文字颜色：默认").onClick(() => this.applyColor(cell, td, null)));
+    menu.addItem((it) => it.setTitle("文字颜色：默认").onClick(() => this.applyColor(cell, td, null, captured)));
     menu.addSeparator();
     for (const b of BG_TINTS) {
       menu.addItem((it) => it.setTitle(`底纹：${b.label}`).setChecked(cell.style?.bg === b.token).onClick(() => this.applyStyle(cell, td, { bg: b.token })));
@@ -584,7 +608,9 @@ export class NctableView extends MarkdownRenderChild {
     const editor = this.editorFor(cell);
     if (editor && document.activeElement === editor) {
       const r = sel.getRangeAt(0);
-      return { start: Math.min(r.startOffset, cell.text.length), end: Math.min(r.endOffset, cell.text.length) };
+      const a = this.sourceOffset(editor, r.startContainer, r.startOffset);
+      const b = this.sourceOffset(editor, r.endContainer, r.endOffset);
+      return { start: Math.min(a, b), end: Math.max(a, b) };
     }
     const t = sel.toString();
     if (!t) return null;
@@ -592,26 +618,124 @@ export class NctableView extends MarkdownRenderChild {
     return i >= 0 ? { start: i, end: i + t.length } : null;
   }
 
-  private applyWrap(cell: Cell, token: string): void {
-    const editor = this.editorFor(cell);
-    if (!editor) return;
+  // DOM Range 偏移 → 源码字符偏移（container 可能是编辑器 div 本身，此时 offset 是子节点索引）
+  private sourceOffset(editor: HTMLElement, node: Node, offset: number): number {
+    if (node === editor) {
+      let s = 0;
+      const kids = editor.childNodes;
+      for (let i = 0; i < offset && i < kids.length; i++) s += (kids[i].textContent ?? "").length;
+      return Math.min(s, editor.textContent?.length ?? 0);
+    }
+    let s = 0;
+    for (const kid of Array.from(editor.childNodes)) {
+      if (kid === node || kid.contains(node)) return Math.min(s + offset, editor.textContent?.length ?? 0);
+      s += (kid.textContent ?? "").length;
+    }
+    return Math.min(offset, editor.textContent?.length ?? 0);
+  }
+
+  private trackSelection(): void {
+    const ae = document.activeElement;
+    if (!(ae instanceof HTMLElement)) return;
+    // 其他编辑面（CodeMirror/输入框/别的 contenteditable）获焦即失效，避免工具栏误打旧单元格
+    if (!ae.classList.contains("nct-cell") && ae.closest(".cm-editor, textarea, input, select, [contenteditable]")) {
+      this.tracked = null;
+      return;
+    }
+    if (!this.doc || !ae.classList.contains("nct-cell") || !this.containerEl.contains(ae)) return;
+    const td = ae.closest(".nct-cell-td") as HTMLElement | null;
+    const cell = td ? findCell(this.doc, td.dataset.cellId ?? "") : null;
+    if (!cell) return;
+    const sel = window.getSelection();
     let start = cell.text.length;
     let end = start;
-    const mapped = this.renderedSelectionRange(cell, editor);
-    if (mapped) {
-      start = mapped.start;
-      end = mapped.end;
+    if (sel && sel.rangeCount > 0 && ae.contains(sel.anchorNode)) {
+      const r = sel.getRangeAt(0);
+      start = this.sourceOffset(ae, r.startContainer, r.startOffset);
+      end = this.sourceOffset(ae, r.endContainer, r.endOffset);
     }
+    this.tracked = { cell, start: Math.min(start, end), end: Math.max(start, end), at: Date.now() };
+  }
+
+  get trackedAt(): number {
+    return this.tracked?.at ?? 0;
+  }
+
+  // Editing Toolbar 格式命令接管：单元格是活跃编辑面时作用于单元格源码，否则交还原命令
+  tryFormatCommand(id: string): boolean {
+    const token = TOOLBAR_FORMAT_COMMANDS[id];
+    if (token === undefined || !this.doc || !this.tracked) return false;
+    const cell = findCell(this.doc, this.tracked.cell.id);
+    const editor = cell ? this.editorFor(cell) : null;
+    if (!cell || !editor || !editor.isConnected) return false;
+    const ae = document.activeElement as HTMLElement | null;
+    if (ae !== editor) {
+      if (ae?.closest(".cm-editor, .markdown-source-view, textarea, input, select, [contenteditable]")) return false;
+      // 焦点在工具栏等 chrome 上时，仅当本表属于当前活跃视图才接管（打开笔记后不抢笔记的命令）
+      const viewEl = (this.app.workspace.activeLeaf?.view as { containerEl?: HTMLElement } | undefined)?.containerEl;
+      if (!viewEl || !viewEl.contains(this.containerEl)) return false;
+    }
+    if (id === "editing-toolbar:format-eraser") {
+      this.clearCellFormat(cell, editor.closest(".nct-cell-td") as HTMLElement);
+      editor.focus();
+      return true;
+    }
+    const { start, end } = this.tracked;
+    const res = toggleWrap(cell.text, Math.min(start, cell.text.length), Math.min(end, cell.text.length), token);
+    cell.text = res.text;
+    editor.focus();
+    editor.textContent = res.text;
+    this.selectRange(editor, res.selStart, res.selEnd);
+    this.scheduleSave();
+    return true;
+  }
+
+  private applyWrap(cell: Cell, token: string, range?: { start: number; end: number } | null): void {
+    const editor = this.editorFor(cell);
+    if (!editor) return;
+    const mapped = range === undefined ? this.renderedSelectionRange(cell, editor) : range;
+    const start = mapped ? Math.min(mapped.start, cell.text.length) : cell.text.length;
+    const end = mapped ? Math.min(mapped.end, cell.text.length) : start;
+    const res = toggleWrap(cell.text, start, end, token);
+    cell.text = res.text;
     if (document.activeElement !== editor) editor.focus();
-    const { text, caret } = wrapSelection(cell.text, start, end, token);
-    cell.text = text;
-    editor.textContent = text;
-    this.restoreCaret(editor, caret);
+    editor.textContent = res.text;
+    this.selectRange(editor, res.selStart, res.selEnd);
     this.scheduleSave();
   }
 
+  private popFormatScope(): void {
+    if (this.scopePushed && this.formatScope) {
+      this.app.keymap.popScope(this.formatScope);
+      this.scopePushed = false;
+    }
+  }
+
+  // Scope 回调：返回 false 表示已消费快捷键；焦点不在本格容器内时放行给默认命令
+  private wrapFocusedCell(token: string): boolean {
+    const ae = document.activeElement;
+    if (!this.doc || !(ae instanceof HTMLElement) || !ae.classList.contains("nct-cell") || !this.containerEl.contains(ae)) return true;
+    const td = ae.closest(".nct-cell-td") as HTMLElement | null;
+    const cell = td ? findCell(this.doc, td.dataset.cellId ?? "") : null;
+    if (!cell) return true;
+    this.applyWrap(cell, token, this.renderedSelectionRange(cell, ae));
+    return false;
+  }
+
+  private selectRange(editor: HTMLElement, start: number, end: number): void {
+    const sel = window.getSelection();
+    const node = editor.firstChild;
+    if (!sel || !node) return;
+    const len = (node.textContent ?? "").length;
+    const r = document.createRange();
+    r.setStart(node, Math.min(start, len));
+    r.setEnd(node, Math.min(end, len));
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+
   // 颜色只作用于选区文字；无选区时作用于整格文字（inline span，而非整格 style）
-  private applyColor(cell: Cell, td: HTMLElement, css: string | null): void {
+  private applyColor(cell: Cell, td: HTMLElement, css: string | null, range?: { start: number; end: number } | null): void {
     const editor = this.editorFor(cell);
     if (css === null) {
       cell.text = stripColorSpans(cell.text);
@@ -621,8 +745,9 @@ export class NctableView extends MarkdownRenderChild {
       }
       if (editor && document.activeElement === editor) editor.textContent = cell.text;
     } else {
-      const range = (editor && this.renderedSelectionRange(cell, editor)) ?? { start: 0, end: cell.text.length };
-      const { text, caret } = wrapSelectionColor(cell.text, range.start, range.end, css);
+      const mapped = range === undefined ? (editor ? this.renderedSelectionRange(cell, editor) : null) : range;
+      const r = mapped ?? { start: 0, end: cell.text.length };
+      const { text, caret } = wrapSelectionColor(cell.text, r.start, r.end, css);
       cell.text = text;
       if (editor && document.activeElement === editor) {
         editor.textContent = text;

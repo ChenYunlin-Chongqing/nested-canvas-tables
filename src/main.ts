@@ -1,5 +1,6 @@
 import { Notice, Plugin } from "obsidian";
 import { createCanvasWithTable, createTableCard, createTableData, nctableBlock, quickCreateTable } from "./commands.ts";
+import { TOOLBAR_FORMAT_COMMANDS } from "./core/markdown.ts";
 import { openDemo, runTour } from "./onboarding.ts";
 import { NctableView } from "./render/table-view.ts";
 import { DEFAULT_SETTINGS, NctSettings, NctSettingTab } from "./settings.ts";
@@ -11,8 +12,28 @@ export default class NestedCanvasTablesPlugin extends Plugin {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     this.addSettingTab(new NctSettingTab(this.app, this));
 
+    const views = new Set<NctableView>();
     this.registerMarkdownCodeBlockProcessor("nctable", (source, el, ctx) => {
-      ctx.addChild(new NctableView(this.app, source, el, ctx.sourcePath));
+      const view = new NctableView(this.app, source, el, ctx.sourcePath);
+      views.add(view);
+      view.register(() => views.delete(view));
+      ctx.addChild(view);
+    });
+
+    // Editing Toolbar 的格式命令在画布内拿不到编辑器（getActiveEditor 为 null）而空转；
+    // 单元格是活跃编辑面时接管到单元格源码，其余场景原样放行。卸载时还原。
+    const commands = (this.app as unknown as { commands: { executeCommandById: (id: string) => boolean } }).commands;
+    const origExec = commands.executeCommandById.bind(commands);
+    commands.executeCommandById = (id: string): boolean => {
+      if (id in TOOLBAR_FORMAT_COMMANDS) {
+        for (const view of [...views].sort((a, b) => b.trackedAt - a.trackedAt)) {
+          if (view.tryFormatCommand(id)) return true;
+        }
+      }
+      return origExec(id);
+    };
+    this.register(() => {
+      commands.executeCommandById = origExec;
     });
 
     const ribbon = this.addRibbonIcon("table", "一键新建嵌套表格", () => {

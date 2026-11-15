@@ -168,3 +168,43 @@ export function wrapSelection(source: string, start: number, end: number, token:
   const text = source.slice(0, start) + token + source.slice(start, end) + token + source.slice(end);
   return { text, caret: end + token.length * 2 };
 }
+
+export interface ToggleWrapResult {
+  text: string;
+  selStart: number;
+  selEnd: number;
+  wrapped: boolean;
+}
+
+// 与 CodeMirror toggleMarkdownFormatting 同语义：已包裹则解除，否则包裹；返回操作后应选中的区间
+export function toggleWrap(source: string, start: number, end: number, token: string): ToggleWrapResult {
+  const L = token.length;
+  const sel = source.slice(start, end);
+  if (sel.length >= L * 2 && sel.startsWith(token) && sel.endsWith(token)) {
+    const inner = sel.slice(L, sel.length - L);
+    return { text: source.slice(0, start) + inner + source.slice(end), selStart: start, selEnd: start + inner.length, wrapped: false };
+  }
+  if (start >= L && source.slice(start - L, start) === token && source.slice(end, end + L) === token) {
+    return {
+      text: source.slice(0, start - L) + sel + source.slice(end + L),
+      selStart: start - L,
+      selEnd: end - L,
+      wrapped: false,
+    };
+  }
+  return {
+    text: source.slice(0, start) + token + sel + token + source.slice(end),
+    selStart: start + L,
+    selEnd: end + L,
+    wrapped: true,
+  };
+}
+
+// Editing Toolbar 的格式命令 → 行内标记；单元格聚焦时由本插件接管（画布内 getActiveEditor 为 null）
+export const TOOLBAR_FORMAT_COMMANDS: Record<string, string> = {
+  "editing-toolbar:toggle-bold": "**",
+  "editing-toolbar:toggle-italics": "*",
+  "editing-toolbar:toggle-strikethrough": "~~",
+  "editing-toolbar:toggle-highlight": "==",
+  "editing-toolbar:format-eraser": "",
+};

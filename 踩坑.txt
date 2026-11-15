@@ -84,4 +84,13 @@
 - 正解：页内 require("electron").remote.BrowserWindow.getAllWindows().find(w=>w.getTitle().includes("nctable-test-vault")).focus()（Obsidian renderer 有 node integration、remote 可用），等 ~400ms 后 hasFocus=true，真实 blur 即派发。验收脚本开头统一做。
 - 叠加坑：nct-89 旧版全局 querySelector(".canvas-node …") 命中其他套件遗留的隐藏旧视图（rect 0）：focus 静默失败、写入落在被冲突保护停写的旧 store。统一开头 disable/enable 加载新构建 + detach 全部 leaves + 按 rect.width>0 定位可见节点后 ALL_PASS。
 
+【右键格式追加到末尾 / Editing Toolbar 画布内空转（2026-11-15 用户报障修复）】
+- 症状①：选中文字右键加粗/荧光，标记被追加到整格末尾（「今天很好****====」）。根因：真实鼠标点击菜单项的瞬间 contenteditable 失焦、选区坍塌，菜单 onClick 里再读 live selection 已是空→走「无选区追加」分支。旧验收用合成 .click() 不夺焦，掩盖了 bug。修复：contextmenu 弹菜单那一刻捕获选区源码偏移（renderedSelectionRange），作为 captured 传入 applyWrap/applyColor；菜单点击不再读 live selection。
+- 包裹改 toggle 语义（core/markdown.ts toggleWrap）：选区自身含标记→剥掉；选区外侧紧邻成对标记→解除；否则包裹并选中内部文字；无选区插入成对标记光标居中。重复点同一格式=解除，与 Editing Toolbar/Word 习惯一致。
+- 症状②：Editing Toolbar 按钮在画布内空转。根因：其按钮走 app.commands.executeCommandById，命令回调用 getActiveEditor()，画布内为 null。修复：main.ts 包 executeCommandById，对映射的五个命令（toggle-bold/italics/strikethrough/highlight/format-eraser）先问各 NctableView.tryFormatCommand；视图用 selectionchange 持续记录单元格选区源码偏移（tracked），工具栏夺焦后仍可作用。资格规则：tracked 存在；activeElement 是本格→直接接管；否则若落在其他编辑面（.cm-editor/textarea/input/[contenteditable]）→放行；再要求 activeLeaf 视图容器包含本视图（防跨标签劫持）。卸载还原原函数。其他编辑面聚焦时 trackSelection 立即作废 tracked，防陈旧选区劫持笔记命令。
+- 症状③：格内 Mod+B/I 无效。根因：Obsidian 全局快捷键在 **window capture** 层 preventDefault+stopPropagation，先于一切元素级 keydown；容器「阻断冒泡」对它无效，格内 keydown 监听永远收不到 Mod+B（探针：win-capture 记录 dp=true，document/cell 监听全无）。正解：Scope 栈——单元格 focus 时 app.keymap.pushScope(格式 Scope，注册 Mod+b/Mod+i)，blur/render/卸载 popScope；回调返回 false 消费、焦点不在本格返回 true 放行默认命令。笔记/编辑器场景 Scope 已弹出，零影响。
+- 验收工具坑：Editing Toolbar 按钮用 aria-label 中文标识（加粗/斜体/删除线/高亮/清除文本格式），图标是 svg.lucide-*；SVG 的 className 序列化是 "[object SVGAnimatedString]"，须 getAttribute("class")。旧 ".bold-glyph" 选择器不存在。
+- 验收读写坑：笔记编辑器改动落盘有 Obsidian 自身存盘延迟，600ms 后 vault.read 可能仍旧值→委托回归断言改读 editor.getValue()（即时）。菜单项真实点击需等菜单入场动画（≥300ms），否则坐标点击落空（底纹探针一度假 FAIL）。
+- 验收：nct-15 十五项真实鼠标/键盘事件全 PASS（右键包裹/嵌套/重复解除、工具栏加粗/荧光/斜体/删除线/清除、格内 Mod+B、笔记委托回归、节点零误拖）；nct-10/nct-fix/nct-89/nct-9 回归全绿；37 单测 + tsc 通过。
+
 （后续踩坑随开发追加）
