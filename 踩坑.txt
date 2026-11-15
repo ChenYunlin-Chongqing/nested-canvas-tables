@@ -110,4 +110,12 @@
 - 图片宽度：ImageRef.width；wikilink 末段 | 纯数字解析为宽（兼容原生 ![[a.png|400]] 与 |alt|400），mdlink ![alt|N](url) 为扩展语法；formatImageToken 序列化往返；findImageTokens 给偏移按 occurrence 重写（同 token 多图用出现索引消歧）。角柄 pointerdown setPointerCapture 实时调宽（clamp 40–1600）、pointerup 重写 token 落盘、dblclick 还原；右键图片加预设组（200/400/600/原始）setChecked。
 - 验收：nct-17 三十七项真实事件全 PASS（单层切换 3→1→0、槽 0/0/28、不压字、最左按钮可点、结构菜单往返、折叠 chip 流内、图片拖拽/双击/预设、零误拖）；nct-10/nct-fix/nct-89/nct-9/nct-15/nct-16 六套回归全绿；42 单测 + tsc。
 
+【DOM 内工具栏仍被裁 → body 级浮层（#18，2026-11-15 用户报障「按键还是显示不完全」）】
+- 症状：#17 给 td/th 加 overflow:visible 后，窄子表工具栏左段仍被裁。根因是一类问题：DOM 内绝对定位浮层总可能被某个祖先 overflow 裁（.nct-table-scroll auto、canvas-node-content hidden、预览 td/th hidden），逐个补丁补不完。根本解：工具栏移到 body 级 position:fixed 浮层（与 Obsidian Menu/popover 同层），getBoundingClientRect 屏幕坐标定位 + 视口夹取，rAF 每帧跟随（画布平移/缩放、槽带过渡、重渲染）；每 Document 一个实例（Map<Document, FloatingState>，popout 安全），onunload destroyFloatingToolbar 全清。
+- 槽带联动：指针在浮层上时 :hover 链断开→.nct-strip-open 类保持让槽；悬停同行任一子表时该行全部 .nct-has-child 容器一并让槽（否则浮层左溢压到高 28px 的兄弟表文字），槽带成整行空白带。
+- 坑①：浮层高度不随画布缩放，低倍率下 28px 槽带比浮层矮→顶边探入父格。顶边夹到槽带顶（area.getBoundingClientRect().top），宁压自家表头不入父格。
+- 坑②：浮层按钮第一次点击引发重渲染后 hoverBlock 指向脱链旧 DOM；第二个按钮 mousedown 的 focusin 走 refresh 判「无 block」隐藏浮层（visibility:hidden 吞掉 click）→折叠/删除无响应。修复：refresh 里脱链时按 ownerPath 重解析（resolveOwnerBlock，与 tick 共用），真 null（指针确实离开）才隐藏。
+- 验收坑：测试库窗口重启后 CDP page id 变化（WS_ERROR），跑套件前 curl /json 取新 id；gc2 读盘嵌套路径是 rows[0].cells[0].childTable.rows[0].cells[1].childTable（cells[1] 是图片格），写错路径 undefined.rows 假 ERR。
+- 验收：nct-17 四十二项 ALL_PASS（窄表溢出完整可见、整行槽 0/28/28、不压字、浮层 +行/折叠/chip 展开连点）；六套回归全绿；42 单测 + tsc。
+
 （后续踩坑随开发追加）

@@ -16,12 +16,12 @@
   background: var(--background-primary);
 }
 
-/* 浮动工具栏：默认隐藏，不占阅读空间；置于表格上方悬浮槽内，不盖表头与文字 */
+/* 浮动工具栏：挂 body、JS 屏幕坐标定位并夹取视口，祖先 overflow/transform 裁不到 */
 .nct-toolbar {
-  position: absolute;
-  top: -28px;
-  right: 0;
-  z-index: 6;
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: var(--layer-popover, 300);
   display: flex;
   gap: 4px;
   padding: 2px;
@@ -30,14 +30,14 @@
   border-radius: var(--radius-s);
   box-shadow: var(--shadow-s);
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
   transition: opacity 0.12s ease;
 }
 
-/* 单层控件：悬停/聚焦最深表格时只显它这一层，祖先层全部隐藏，嵌套不再层层叠加 */
-.nct-table-block:hover:not(:has(.nct-table-block:hover)) > .nct-toolbar,
-.nct-table-block:focus-within:not(:has(.nct-table-block:focus-within)) > .nct-toolbar {
+.nct-toolbar.is-visible {
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
 }
 
@@ -193,7 +193,8 @@
 
 /* 子表工具栏悬浮槽：仅最内层表格悬停/聚焦时向下让出，祖先层不开槽 */
 .nct-cell-child.nct-has-child:hover:not(:has(.nct-table-block .nct-table-block:hover)),
-.nct-cell-child.nct-has-child:focus-within:not(:has(.nct-table-block .nct-table-block:focus-within)) {
+.nct-cell-child.nct-has-child:focus-within:not(:has(.nct-table-block .nct-table-block:focus-within)),
+.nct-cell-child.nct-has-child.nct-strip-open {
   padding-top: var(--nct-strip);
 }
 

@@ -92,10 +92,12 @@ export class NctableView extends MarkdownRenderChild {
       const img = (target.closest("img.nct-img") ?? target.closest(".nct-img-wrap")?.querySelector("img.nct-img") ?? null) as HTMLImageElement | null;
       this.openCellMenu(cell, td, e, img);
     });
+    registerFloatingView(this);
     void this.init();
   }
 
   onunload(): void {
+    unregisterFloatingView(this);
     this.renderAbort?.abort();
     this.renderAbort = null;
     if (this.saveTimer !== null) {
@@ -179,32 +181,6 @@ export class NctableView extends MarkdownRenderChild {
     const block = document.createElement("div");
     block.className = isChild ? "nct-table-block nct-child" : "nct-table-block";
     block.dataset.path = JSON.stringify(path);
-
-    const toolbar = document.createElement("div");
-    toolbar.className = "nct-toolbar";
-    toolbar.appendChild(this.button("+ 行", "", () => { addRow(table); this.render(); this.scheduleSave(); }));
-    toolbar.appendChild(this.button("+ 列", "", () => { addColumn(table); this.render(); this.scheduleSave(); }));
-    if (isChild) {
-      const fold = this.button("折叠", "", () => {
-        this.collapsed.add(path[path.length - 1]);
-        this.render();
-      });
-      fold.title = "折叠子表";
-      toolbar.appendChild(fold);
-      const del = this.button("删除子表", "nct-danger", () => {
-        if (hasContent(table) && !window.confirm("删除此子表格及其全部内容，确定？")) return;
-        const parentCell = this.cellAtPath(path);
-        if (parentCell) {
-          delete parentCell.childTable;
-          this.collapsed.delete(parentCell.id);
-        }
-        this.render();
-        this.scheduleSave();
-      });
-      del.title = "删除此子表格";
-      toolbar.appendChild(del);
-    }
-    block.appendChild(toolbar);
 
     const scroll = document.createElement("div");
     scroll.className = "nct-table-scroll";
@@ -983,6 +959,40 @@ export class NctableView extends MarkdownRenderChild {
     this.scheduleSave();
   }
 
+  tbAddRow(path: string[]): void {
+    const table = this.doc ? tableAtPath(this.doc, path) : null;
+    if (!table) return;
+    addRow(table);
+    this.render();
+    this.scheduleSave();
+  }
+
+  tbAddColumn(path: string[]): void {
+    const table = this.doc ? tableAtPath(this.doc, path) : null;
+    if (!table) return;
+    addColumn(table);
+    this.render();
+    this.scheduleSave();
+  }
+
+  tbCollapse(path: string[]): void {
+    this.collapsed.add(path[path.length - 1]);
+    this.render();
+  }
+
+  tbDeleteChild(path: string[]): void {
+    const table = this.doc ? tableAtPath(this.doc, path) : null;
+    if (!table) return;
+    if (hasContent(table) && !window.confirm("删除此子表格及其全部内容，确定？")) return;
+    const parentCell = this.cellAtPath(path);
+    if (parentCell) {
+      delete parentCell.childTable;
+      this.collapsed.delete(parentCell.id);
+    }
+    this.render();
+    this.scheduleSave();
+  }
+
   private cellAtPath(path: string[]): Cell | null {
     if (!this.doc || path.length === 0) return null;
     let current: Table = this.doc;
@@ -1060,4 +1070,185 @@ export class NctableView extends MarkdownRenderChild {
     this.collapsed.clear();
     this.render();
   }
+}
+
+// 工具栏挂 body、屏幕坐标定位：祖先 overflow/transform 裁不到，窄子表也完整可见。
+interface FloatingState {
+  el: HTMLElement;
+  views: Set<NctableView>;
+  hoverBlock: HTMLElement | null;
+  focusBlock: HTMLElement | null;
+  ownerView: NctableView | null;
+  ownerPath: string;
+  block: HTMLElement | null;
+  stripEls: HTMLElement[];
+  raf: number;
+  dispose: () => void;
+}
+
+const floatingByDoc = new Map<Document, FloatingState>();
+
+export function registerFloatingView(view: NctableView): void {
+  stateFor(view.containerEl.ownerDocument).views.add(view);
+}
+
+export function unregisterFloatingView(view: NctableView): void {
+  const st = floatingByDoc.get(view.containerEl.ownerDocument);
+  if (!st) return;
+  st.views.delete(view);
+  if (st.ownerView === view) hideFloating(st);
+}
+
+export function destroyFloatingToolbar(): void {
+  for (const st of floatingByDoc.values()) st.dispose();
+  floatingByDoc.clear();
+}
+
+function stateFor(doc: Document): FloatingState {
+  const existing = floatingByDoc.get(doc);
+  if (existing) return existing;
+  const el = doc.createElement("div");
+  el.className = "nct-toolbar";
+  doc.body.appendChild(el);
+  const st: FloatingState = {
+    el,
+    views: new Set(),
+    hoverBlock: null,
+    focusBlock: null,
+    ownerView: null,
+    ownerPath: "",
+    block: null,
+    stripEls: [],
+    raf: 0,
+    dispose: () => undefined,
+  };
+  const over = (e: Event) => {
+    const t = e.target;
+    if (!(t instanceof Element) || t.closest(".nct-toolbar")) return;
+    st.hoverBlock = t.closest(".nct-table-block");
+    refreshFloating(st);
+  };
+  const fin = (e: FocusEvent) => {
+    const t = e.target;
+    st.focusBlock = t instanceof Element ? t.closest(".nct-table-block") : null;
+    refreshFloating(st);
+  };
+  const fout = () => {
+    st.focusBlock = null;
+    refreshFloating(st);
+  };
+  doc.addEventListener("pointerover", over, true);
+  doc.addEventListener("focusin", fin, true);
+  doc.addEventListener("focusout", fout, true);
+  el.addEventListener("contextmenu", (e) => e.preventDefault());
+  st.dispose = () => {
+    hideFloating(st);
+    doc.removeEventListener("pointerover", over, true);
+    doc.removeEventListener("focusin", fin, true);
+    doc.removeEventListener("focusout", fout, true);
+    el.remove();
+  };
+  floatingByDoc.set(doc, st);
+  return st;
+}
+
+function resolveOwnerBlock(st: FloatingState): HTMLElement | null {
+  if (!st.ownerView || !st.ownerPath) return null;
+  return (
+    Array.from(st.ownerView.containerEl.querySelectorAll<HTMLElement>(".nct-table-block")).find((b) => b.dataset.path === st.ownerPath) ?? null
+  );
+}
+
+function refreshFloating(st: FloatingState): void {
+  let block = st.hoverBlock ?? st.focusBlock;
+  // 点击浮层按钮引发重渲染后旧 block 脱链：按 ownerPath 重解析，
+  // 否则下一次 mousedown 的 focusin 会把浮层隐藏、吞掉点击
+  if (block && !block.isConnected) block = resolveOwnerBlock(st);
+  const view = block ? [...st.views].find((v) => v.containerEl.contains(block)) : undefined;
+  if (!block || !view) {
+    hideFloating(st);
+    return;
+  }
+  const path = block.dataset.path ?? "[]";
+  if (st.ownerView !== view || st.ownerPath !== path) {
+    st.ownerView = view;
+    st.ownerPath = path;
+    st.el.dataset.ownerPath = path;
+    buildFloatingButtons(st, view, JSON.parse(path) as string[]);
+  }
+  st.block = block;
+  st.el.classList.add("is-visible");
+  if (!st.raf) st.raf = requestAnimationFrame(() => tickFloating(st));
+}
+
+function buildFloatingButtons(st: FloatingState, view: NctableView, path: string[]): void {
+  const doc = st.el.ownerDocument;
+  st.el.empty();
+  const add = (label: string, cls: string, title: string, fn: () => void) => {
+    const b = doc.createElement("button");
+    b.type = "button";
+    b.className = `nct-btn ${cls}`;
+    b.textContent = label;
+    b.title = title;
+    b.addEventListener("click", fn);
+    st.el.appendChild(b);
+  };
+  add("+ 行", "", "末尾追加一行", () => view.tbAddRow(path));
+  add("+ 列", "", "末尾追加一列", () => view.tbAddColumn(path));
+  if (path.length > 0) {
+    add("折叠", "", "折叠子表", () => view.tbCollapse(path));
+    add("删除子表", "nct-danger", "删除此子表格", () => view.tbDeleteChild(path));
+  }
+}
+
+function tickFloating(st: FloatingState): void {
+  st.raf = 0;
+  let block = st.block;
+  if (!block || !block.isConnected) {
+    block = resolveOwnerBlock(st);
+    if (!block) {
+      hideFloating(st);
+      return;
+    }
+    st.block = block;
+  }
+  // 指针移到浮层上时 :hover 链断开，用类保持预留槽开启；同行兄弟子表一并让槽，
+  // 槽带成为整行空白带，浮层左溢也不压兄弟表文字
+  const area = block.parentElement?.closest<HTMLElement>(".nct-cell-child.nct-has-child") ?? null;
+  const row = area?.closest("tr") ?? null;
+  const areas = area ? (row ? Array.from(row.querySelectorAll<HTMLElement>(".nct-cell-child.nct-has-child")) : [area]) : [];
+  if (areas.length !== st.stripEls.length || areas.some((a, i) => a !== st.stripEls[i])) {
+    for (const el of st.stripEls) el.classList.remove("nct-strip-open");
+    st.stripEls = areas;
+    for (const el of areas) el.classList.add("nct-strip-open");
+  }
+  const win = st.el.ownerDocument.defaultView;
+  if (!win) return;
+  const r = block.getBoundingClientRect();
+  const w = st.el.offsetWidth;
+  const h = st.el.offsetHeight;
+  const vw = win.innerWidth;
+  const vh = win.innerHeight;
+  const left = Math.min(Math.max(r.right - w, 2), Math.max(2, vw - w - 2));
+  // 浮层高度不随画布缩放，槽带在低倍率下比浮层矮：顶边夹到槽带顶，宁压自家表头也不入父格
+  const bandTop = area ? area.getBoundingClientRect().top : 2;
+  let top = Math.max(r.top - h - 2, bandTop);
+  if (top < 2) top = r.bottom + 2;
+  top = Math.min(Math.max(top, 2), Math.max(2, vh - h - 2));
+  st.el.style.left = `${Math.round(left)}px`;
+  st.el.style.top = `${Math.round(top)}px`;
+  st.raf = requestAnimationFrame(() => tickFloating(st));
+}
+
+function hideFloating(st: FloatingState): void {
+  if (st.raf) cancelAnimationFrame(st.raf);
+  st.raf = 0;
+  st.el.classList.remove("is-visible");
+  for (const el of st.stripEls) el.classList.remove("nct-strip-open");
+  st.stripEls = [];
+  st.ownerView = null;
+  st.ownerPath = "";
+  st.block = null;
+  st.hoverBlock = null;
+  st.focusBlock = null;
 }

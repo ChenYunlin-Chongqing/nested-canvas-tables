@@ -2,7 +2,7 @@ import { Notice, Plugin } from "obsidian";
 import { createCanvasWithTable, createTableCard, createTableData, nctableBlock, quickCreateTable } from "./commands.ts";
 import { TOOLBAR_FORMAT_COMMANDS } from "./core/markdown.ts";
 import { openDemo, runTour } from "./onboarding.ts";
-import { NctableView } from "./render/table-view.ts";
+import { NctableView, destroyFloatingToolbar } from "./render/table-view.ts";
 import { DEFAULT_SETTINGS, NctSettings, NctSettingTab } from "./settings.ts";
 
 export default class NestedCanvasTablesPlugin extends Plugin {
@@ -100,6 +100,10 @@ export default class NestedCanvasTablesPlugin extends Plugin {
     this.app.workspace.onLayoutReady(() => {
       if (!this.settings.onboarded) void this.startTour(true);
     });
+  }
+
+  onunload(): void {
+    destroyFloatingToolbar();
   }
 
   private async startTour(firstRun: boolean): Promise<void> {
