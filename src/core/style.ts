@@ -1,7 +1,25 @@
+export type HAlign = "left" | "center" | "right" | "justify";
+export type VAlign = "top" | "middle" | "bottom";
+
 export interface CellStyle {
   bg?: string;
   color?: string;
+  align?: HAlign;
+  valign?: VAlign;
 }
+
+export const H_ALIGNS: { token: HAlign; label: string; icon: string }[] = [
+  { token: "left", label: "靠左", icon: "align-left" },
+  { token: "center", label: "居中", icon: "align-center" },
+  { token: "right", label: "靠右", icon: "align-right" },
+  { token: "justify", label: "两端对齐", icon: "align-justify" },
+];
+
+export const V_ALIGNS: { token: VAlign; label: string; icon: string }[] = [
+  { token: "top", label: "靠顶", icon: "align-start-vertical" },
+  { token: "middle", label: "居中", icon: "align-center-vertical" },
+  { token: "bottom", label: "靠底", icon: "align-end-vertical" },
+];
 
 export interface PaletteEntry {
   token: string;
@@ -42,9 +60,11 @@ export function validateCellStyle(value: unknown): string | null {
   if (typeof value !== "object") return "style 不是对象";
   const s = value as Record<string, unknown>;
   for (const key of Object.keys(s)) {
-    if (key !== "bg" && key !== "color") return `style 含未知字段：${key}`;
+    if (key !== "bg" && key !== "color" && key !== "align" && key !== "valign") return `style 含未知字段：${key}`;
   }
   if (s.color !== undefined && !TEXT_COLORS.some((c) => c.token === s.color)) return "style.color 不是合法色板 token";
   if (s.bg !== undefined && !BG_TINTS.some((c) => c.token === s.bg)) return "style.bg 不是合法色板 token";
+  if (s.align !== undefined && !H_ALIGNS.some((a) => a.token === s.align)) return "style.align 不是合法水平对齐 token";
+  if (s.valign !== undefined && !V_ALIGNS.some((a) => a.token === s.valign)) return "style.valign 不是合法垂直对齐 token";
   return null;
 }

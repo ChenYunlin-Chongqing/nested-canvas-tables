@@ -161,12 +161,25 @@
   border-radius: var(--radius-s);
 }
 
-/* 单元格内容盒：行高拖拽时定高 + 内部滚动 */
+/* 单元格内容盒：行高拖拽时定高 + 内部滚动；flex 列供垂直对齐 auto 外边距 */
 .nct-cell-box {
   position: relative;
   padding: 4px 8px;
   box-sizing: border-box;
   min-height: 1.6em;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 垂直对齐（定高行）：有余高时 auto 外边距把内容整体推到位，内容超高时归零不影响滚动 */
+.nct-cell-box.nct-valign-middle > .nct-cell {
+  margin-top: auto;
+}
+.nct-cell-box.nct-valign-middle > .nct-cell-child {
+  margin-bottom: auto;
+}
+.nct-cell-box.nct-valign-bottom > .nct-cell {
+  margin-top: auto;
 }
 
 .nct-cell {

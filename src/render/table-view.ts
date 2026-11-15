@@ -25,7 +25,7 @@ import {
   toggleWrap,
   wrapSelectionColor,
 } from "../core/markdown.ts";
-import { BG_TINTS, TEXT_COLORS, bgTintCss, textColorCss } from "../core/style.ts";
+import { BG_TINTS, H_ALIGNS, TEXT_COLORS, V_ALIGNS, bgTintCss, textColorCss, type CellStyle } from "../core/style.ts";
 import { TableStore } from "../core/store.ts";
 import { ensureFolder, stamp, uniquePath } from "../commands.ts";
 
@@ -481,7 +481,20 @@ export class NctableView extends MarkdownRenderChild {
   private paintCell(el: HTMLElement, cell: Cell): void {
     el.replaceChildren(renderInlineMarkdown(cell.text, { resolveImage: this.resolveImage }));
     el.style.color = textColorCss(cell.style?.color) ?? "";
+    this.applyAlignment(cell, el);
     this.attachImageResizers(el, cell);
+  }
+
+  // 水平=text-align；垂直双保险：行被兄弟撑高靠 td vertical-align，定高行靠盒内 auto 外边距（超高归零不裁切）
+  private applyAlignment(cell: Cell, el: HTMLElement | null): void {
+    if (!el) return;
+    el.style.textAlign = cell.style?.align && cell.style.align !== "left" ? cell.style.align : "";
+    const box = el.parentElement;
+    if (!box) return;
+    box.classList.toggle("nct-valign-middle", cell.style?.valign === "middle");
+    box.classList.toggle("nct-valign-bottom", cell.style?.valign === "bottom");
+    const td = box.parentElement;
+    if (td) td.style.verticalAlign = cell.style?.valign === "middle" ? "middle" : cell.style?.valign === "bottom" ? "bottom" : "";
   }
 
   // 图片包一层 wrap 并挂角柄：拖拽实时调宽、落盘写回 token；双击还原原始宽度
@@ -587,6 +600,13 @@ export class NctableView extends MarkdownRenderChild {
       menu.addItem((it) => it.setTitle(`底纹：${b.label}`).setChecked(cell.style?.bg === b.token).onClick(() => this.applyStyle(cell, td, { bg: b.token })));
     }
     menu.addItem((it) => it.setTitle("底纹：无").setChecked(!cell.style?.bg).onClick(() => this.applyStyle(cell, td, { bg: undefined })));
+    menu.addSeparator();
+    for (const a of H_ALIGNS) {
+      menu.addItem((it) => it.setTitle(`水平对齐：${a.label}`).setIcon(a.icon).setChecked((cell.style?.align ?? "left") === a.token).onClick(() => this.applyStyle(cell, td, { align: a.token === "left" ? undefined : a.token })));
+    }
+    for (const v of V_ALIGNS) {
+      menu.addItem((it) => it.setTitle(`垂直对齐：${v.label}`).setIcon(v.icon).setChecked((cell.style?.valign ?? "top") === v.token).onClick(() => this.applyStyle(cell, td, { valign: v.token === "top" ? undefined : v.token })));
+    }
     menu.addSeparator();
     menu.addItem((it) => it.setTitle("插入图片…").setIcon("image").onClick(() => this.pickImage(cell)));
     menu.addItem((it) => it.setTitle("清除格式").setIcon("eraser").onClick(() => this.clearCellFormat(cell, td)));
@@ -906,6 +926,7 @@ export class NctableView extends MarkdownRenderChild {
     if (editor) {
       if (document.activeElement === editor) editor.textContent = cell.text;
       else this.paintCell(editor, cell);
+      this.applyAlignment(cell, editor);
     }
     td.style.background = "";
     this.scheduleSave();
@@ -963,12 +984,13 @@ export class NctableView extends MarkdownRenderChild {
     }
   }
 
-  private applyStyle(cell: Cell, td: HTMLElement, patch: { bg?: string }): void {
+  private applyStyle(cell: Cell, td: HTMLElement, patch: Partial<CellStyle>): void {
     const next = { ...cell.style, ...patch };
-    for (const k of Object.keys(next) as (keyof typeof next)[]) if (next[k] === undefined) delete next[k];
+    for (const k of Object.keys(next) as (keyof CellStyle)[]) if (next[k] === undefined) delete next[k];
     if (Object.keys(next).length === 0) delete cell.style;
     else cell.style = next;
     td.style.background = bgTintCss(cell.style?.bg) ?? "";
+    this.applyAlignment(cell, this.editorFor(cell));
     this.scheduleSave();
   }
 

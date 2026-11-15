@@ -124,4 +124,11 @@
 - 坑②：空行收起后布局上移，验收脚本复用旧坐标右键会落进子表（菜单断言连串假 FAIL）；布局变化后须重取格子空白坐标（box.y+2，contextmenu 监听在容器级，空白处右键同样弹本格菜单）。
 - 验收：nct-19 五项（三父格零高、顶格间隙 8px、静止全 0、悬停浮层完整不压字、槽 0/0/28）+ nct-17 四十七项 ALL_PASS（含空行收起/展开输入/清空再收起往返）+ 六套回归全绿 + 42 单测 + tsc。
 
+【水平×垂直对齐（#20，2026-11-15 用户需求「格子内文字位置可规定：居中/靠左/靠右/两端对齐 × 靠顶/居中/靠底，可相交」）】
+- 实现：CellStyle.align/valign token（H_ALIGNS 4 / V_ALIGNS 3，validateCellStyle 白名单递归校验）；右键菜单七项 setChecked；水平=text-align；垂直双保险——兄弟撑高行靠 td vertical-align（表格内百分比高度不可靠），定高行（rowHeights）靠盒内 flex 列 + auto 外边距（内容超高 auto 归零，不破坏内部滚动）；默认左/顶不写盘，清除格式回收整格 style。
+- 坑①：Obsidian MenuItem.setChecked 的勾选类是 `mod-checked`（图标槽 .menu-item-icon.mod-checked + lucide-check），不是 `is-checked`（那是任务列表的类）。验收断言勾选态查 .menu-item.mod-checked；误查 is-checked 得空数组假 FAIL（只读核 obsidian.asar 确认）。
+- 坑②：canvas zoom-to-fit 缩放节点 rect（180px 定高屏测 137≈×0.76），定高断言改读 inline box.style.height（缩放无关）；几何用留白相等/贴底等比例无关断言。与 #17 坑③同源。
+- 验收：nct-20 二十九项 ALL_PASS（菜单七项+默认勾选、水平四态计算样式+落盘、撑高行垂直三态几何、居中+靠底+蓝晕组合落盘渲染、定高行靠底/居中可滚、清除格式回收、重开渲染恢复、零误拖）；45 单测 + tsc；回归 nct-17/19/16/15/10/fix/89/9 八套全绿。
+- 坑③：回归脚本 WS 环境变量名不统一——nct-89 读 NCT_WS（其余读 RC_WS），漏设时落硬编码旧 page id 报 WS_ERROR；跑套件前按脚本头部核对 env 名与当前 /json id。
+
 （后续踩坑随开发追加）
