@@ -118,4 +118,10 @@
 - 验收坑：测试库窗口重启后 CDP page id 变化（WS_ERROR），跑套件前 curl /json 取新 id；gc2 读盘嵌套路径是 rows[0].cells[0].childTable.rows[0].cells[1].childTable（cells[1] 是图片格），写错路径 undefined.rows 假 ERR。
 - 验收：nct-17 四十二项 ALL_PASS（窄表溢出完整可见、整行槽 0/28/28、不压字、浮层 +行/折叠/chip 展开连点）；六套回归全绿；42 单测 + tsc。
 
+【子表顶部空行浪费 → 空编辑行收起 + 让槽仅交互期（#19，2026-11-15 用户报障「每个子表最上面即使没有文字都有空行」）】
+- 症状：父格只放子表、没有文字时，子表上方仍有一行空白。来源①：空文本编辑行 .nct-cell（min-height:1.4em）常驻占位；来源②：让槽空带。修复①：cell.childTable 且 text.trim()==="" 且未聚焦时编辑行加 .nct-empty-collapse（min-height:0;height:0;overflow:hidden——用 height:0 而非 display:none 保持可聚焦）；box pointerdown 落在子表/chip 之外时 preventDefault+focus 展开；focus 移除类、blur 空则收回、input 非空展开。修复②：让槽保留但仅交互期开启，静止全 0。
+- 坑①：曾试「彻底移除让槽」求零浪费，结果悬停时浮层盖住祖先表头文字（分级/表现/I 级被遮，截图取证）——违背「不压字」底线，回退。教训：零浪费与不压字须同时成立；槽带在交互期容纳浮层，不算浪费。最终组合=空编辑行收起（静止零浪费）+ 交互期让槽（浮层不压字）。
+- 坑②：空行收起后布局上移，验收脚本复用旧坐标右键会落进子表（菜单断言连串假 FAIL）；布局变化后须重取格子空白坐标（box.y+2，contextmenu 监听在容器级，空白处右键同样弹本格菜单）。
+- 验收：nct-19 五项（三父格零高、顶格间隙 8px、静止全 0、悬停浮层完整不压字、槽 0/0/28）+ nct-17 四十七项 ALL_PASS（含空行收起/展开输入/清空再收起往返）+ 六套回归全绿 + 42 单测 + tsc。
+
 （后续踩坑随开发追加）

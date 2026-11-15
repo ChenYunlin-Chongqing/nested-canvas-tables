@@ -1,6 +1,6 @@
 .nct-wrap {
   padding: 4px;
-  /* 子表工具栏悬浮槽：仅最内层表格悬停/聚焦时让出 */
+  /* 子表工具栏悬浮槽：仅交互期（悬停/聚焦/浮层可见）让出，静止零浪费 */
   --nct-strip: 28px;
 }
 
@@ -196,6 +196,13 @@
 .nct-cell-child.nct-has-child:focus-within:not(:has(.nct-table-block .nct-table-block:focus-within)),
 .nct-cell-child.nct-has-child.nct-strip-open {
   padding-top: var(--nct-strip);
+}
+
+/* 父格无文字且有子表：空编辑行零高收起，子表顶格不浪费；点击格子空白或聚焦即展开 */
+.nct-cell.nct-empty-collapse {
+  min-height: 0;
+  height: 0;
+  overflow: hidden;
 }
 
 .nct-status {

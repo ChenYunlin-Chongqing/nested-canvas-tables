@@ -366,7 +366,9 @@ export class NctableView extends MarkdownRenderChild {
     text.className = "nct-cell";
     text.contentEditable = "plaintext-only";
     this.paintCell(text, cell);
+    if (cell.childTable && cell.text.trim() === "") text.classList.add("nct-empty-collapse");
     text.addEventListener("focus", () => {
+      text.classList.remove("nct-empty-collapse");
       if (!this.scopePushed && this.formatScope) {
         this.app.keymap.pushScope(this.formatScope);
         this.scopePushed = true;
@@ -397,9 +399,11 @@ export class NctableView extends MarkdownRenderChild {
     text.addEventListener("blur", () => {
       this.popFormatScope();
       this.paintCell(text, cell);
+      if (cell.childTable && cell.text.trim() === "") text.classList.add("nct-empty-collapse");
     }, this.signal());
     text.addEventListener("input", () => {
       cell.text = text.textContent ?? "";
+      if (cell.text.trim() !== "") text.classList.remove("nct-empty-collapse");
       this.scheduleSave();
     }, this.signal());
     text.addEventListener("keydown", (e) => {
@@ -430,6 +434,15 @@ export class NctableView extends MarkdownRenderChild {
       childArea.appendChild(this.buildTable(cell.childTable, [...path, cell.id], true));
     }
     box.appendChild(childArea);
+    // 空编辑行收起后无点击目标：点格子空白处（子表/chip 之外）展开编辑行
+    box.addEventListener("pointerdown", (e) => {
+      const t = e.target as HTMLElement;
+      if (t.closest(".nct-cell-child") || t.closest(".nct-expand-chip") || text.contains(t)) return;
+      if (text.classList.contains("nct-empty-collapse")) {
+        e.preventDefault();
+        text.focus();
+      }
+    }, this.signal());
     if (cell.childTable && isCollapsed) {
       // 流内 chip：排在文字之后，绝不遮挡内容
       const chip = this.button(`▶ 子表（${cell.childTable.rows.length}×${cell.childTable.columns.length}）`, "nct-expand-chip", () => {
