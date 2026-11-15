@@ -85,6 +85,17 @@ test("columnWidths/rowHeights：null 与合法数字通过、长度不符与非�
   if (!r2.ok) assert.match(r2.error, /非法尺寸/);
 });
 
+test("fitWidth：布尔通过、缺省通过、非布尔被拒绝", () => {
+  const on = createDocument("fit");
+  on.fitWidth = true;
+  assert.equal(parseDocument(JSON.stringify(on)).ok, true);
+  assert.equal(parseDocument(JSON.stringify(createDocument("nofit"))).ok, true);
+  const bad = { ...createDocument("badfit"), fitWidth: "yes" };
+  const res = parseDocument(JSON.stringify(bad));
+  assert.equal(res.ok, false);
+  if (!res.ok) assert.match(res.error, /fitWidth/);
+});
+
 test("表头 columnStyles：null 与合法 token 通过、坏 token 与长度不符被拒绝", () => {
   const good = createDocument("headstyle");
   good.columnStyles = [null, { color: "orange" }, { bg: "tint-5" }];

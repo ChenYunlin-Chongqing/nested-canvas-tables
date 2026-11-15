@@ -26,6 +26,8 @@ export interface Table {
 
 export interface TableDocument extends Table {
   formatVersion: 1;
+  // 一键适应容器宽度：根表与嵌套子表撑满各自容器，外框拉大实时跟随；缺省=随内容收缩
+  fitWidth?: boolean;
 }
 
 export function newId(prefix: string): string {

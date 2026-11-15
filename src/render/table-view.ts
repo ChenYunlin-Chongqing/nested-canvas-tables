@@ -191,7 +191,7 @@ export class NctableView extends MarkdownRenderChild {
     const scroll = document.createElement("div");
     scroll.className = "nct-table-scroll";
     const tableEl = document.createElement("table");
-    tableEl.className = "nct-table";
+    tableEl.className = "nct-table" + (this.doc?.fitWidth ? " nct-fit" : "");
     const thead = document.createElement("thead");
     const headRow = document.createElement("tr");
     table.columns.forEach((header, i) => {
@@ -246,6 +246,15 @@ export class NctableView extends MarkdownRenderChild {
   private applyColumnWidths(table: Table, tableEl: HTMLTableElement, headRow: HTMLTableRowElement): void {
     const ths = Array.from(headRow.querySelectorAll<HTMLElement>("th"));
     const widths = table.columnWidths;
+    // 适应模式：撑满容器，已拖拽列宽保留为 px  hint，其余列均分剩余宽度；外框拉大实时跟随
+    if (this.doc?.fitWidth) {
+      tableEl.style.tableLayout = "fixed";
+      tableEl.style.width = "100%";
+      ths.forEach((th, i) => {
+        th.style.width = widths?.[i] != null ? `${widths[i]}px` : "";
+      });
+      return;
+    }
     if (!widths || widths.every((w) => w === null)) {
       tableEl.style.tableLayout = "";
       tableEl.style.width = "";
@@ -546,6 +555,10 @@ export class NctableView extends MarkdownRenderChild {
     menu.addItem((it) =>
       it.setTitle("粘贴").setIcon("clipboard-paste").onClick(() => void navigator.clipboard.readText().then((t) => this.insertText(cell, t))),
     );
+    menu.addSeparator();
+    menu.addItem((it) =>
+      it.setTitle("适应容器宽度").setIcon("stretch-horizontal").setChecked(!!this.doc?.fitWidth).onClick(() => this.toggleFitWidth()),
+    );
     menu.showAtMouseEvent(e);
   }
 
@@ -574,7 +587,20 @@ export class NctableView extends MarkdownRenderChild {
     menu.addItem((it) =>
       it.setTitle("粘贴").setIcon("clipboard-paste").onClick(() => void navigator.clipboard.readText().then((t) => this.insertHeaderText(table, index, colhead, t))),
     );
+    menu.addSeparator();
+    menu.addItem((it) =>
+      it.setTitle("适应容器宽度").setIcon("stretch-horizontal").setChecked(!!this.doc?.fitWidth).onClick(() => this.toggleFitWidth()),
+    );
     menu.showAtMouseEvent(e);
+  }
+
+  // 文档级开关：根表与全部嵌套子表一起适应各自容器，再点一次回到随内容收缩
+  private toggleFitWidth(): void {
+    if (!this.doc) return;
+    if (this.doc.fitWidth) delete this.doc.fitWidth;
+    else this.doc.fitWidth = true;
+    this.render();
+    this.scheduleSave();
   }
 
   private applyHeaderStyle(table: Table, index: number, th: HTMLElement | null, patch: { color?: string; bg?: string }): void {

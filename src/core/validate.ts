@@ -15,6 +15,9 @@ export function parseDocument(raw: string): ParseResult {
   if (obj.formatVersion !== 1) {
     return { ok: false, error: `不支持的格式版本：${String(obj.formatVersion)}（本插件仅支持 formatVersion 1）` };
   }
+  if (obj.fitWidth !== undefined && typeof obj.fitWidth !== "boolean") {
+    return { ok: false, error: "fitWidth 须为布尔值（适应容器宽度开关）" };
+  }
   const ids = new Set<string>();
   const error = checkTable(obj, ids, "根表格");
   if (error) return { ok: false, error };

@@ -115,6 +115,17 @@
   font-size: var(--font-ui-small);
 }
 
+/* 适应容器宽度（右键一键开关）：根表撑满卡片、子表撑满父格，外框拉大实时跟随 */
+.nct-table.nct-fit {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.nct-table.nct-fit .nct-cell,
+.nct-table.nct-fit .nct-colhead {
+  overflow-wrap: anywhere;
+}
+
 .nct-table th,
 .nct-table td {
   border: 1px solid var(--background-modifier-border);
