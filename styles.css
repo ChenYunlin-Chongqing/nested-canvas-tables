@@ -1,8 +1,6 @@
 .nct-wrap {
   padding: 4px;
-  /* 悬浮槽宽度：悬停/编辑时右侧让出，按钮落槽内不压文字；静止收起不占位 */
-  --nct-gutter: 44px;
-  --nct-gutter-th: 26px;
+  /* 子表工具栏悬浮槽：仅最内层表格悬停/聚焦时让出 */
   --nct-strip: 28px;
 }
 
@@ -18,8 +16,7 @@
   background: var(--background-primary);
 }
 
-/* 浮动工具栏：默认隐藏，悬停/聚焦到本表格才浮现，不占阅读空间；
-   置于表格上方，避免盖住表头右缘的列宽拖拽手柄 */
+/* 浮动工具栏：默认隐藏，不占阅读空间；置于表格上方悬浮槽内，不盖表头与文字 */
 .nct-toolbar {
   position: absolute;
   top: -28px;
@@ -37,8 +34,9 @@
   transition: opacity 0.12s ease;
 }
 
-.nct-table-block:hover > .nct-toolbar,
-.nct-table-block:focus-within > .nct-toolbar {
+/* 单层控件：悬停/聚焦最深表格时只显它这一层，祖先层全部隐藏，嵌套不再层层叠加 */
+.nct-table-block:hover:not(:has(.nct-table-block:hover)) > .nct-toolbar,
+.nct-table-block:focus-within:not(:has(.nct-table-block:focus-within)) > .nct-toolbar {
   opacity: 1;
   pointer-events: auto;
 }
@@ -66,17 +64,13 @@
   color: var(--text-error);
 }
 
-.nct-btn.nct-del {
-  padding: 0 5px;
-  line-height: 1.4;
+/* 折叠态展开 chip：流内排布在文字之后，绝不遮挡内容 */
+.nct-expand-chip {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 8px;
+  border-style: dashed;
   color: var(--text-muted);
-  background: transparent;
-  border-color: transparent;
-}
-
-.nct-btn.nct-del:hover {
-  background: var(--background-modifier-hover);
-  color: var(--text-error);
 }
 
 /* 横向滚动容器：表格超宽时滚动而非撑破卡片；滚动条用主题色 */
@@ -134,18 +128,18 @@
   box-sizing: border-box;
 }
 
+/* Obsidian 预览给 td/th 设 overflow:hidden，会裁掉伸出格子的悬浮工具栏左段 */
+.nct-wrap table.nct-table td,
+.nct-wrap table.nct-table th {
+  overflow: visible;
+}
+
 .nct-table th {
   position: relative;
   padding: 4px 8px;
   background: var(--background-secondary-alt, var(--background-secondary));
   color: var(--text-normal);
   font-weight: 600;
-  transition: padding-right 0.12s ease;
-}
-
-.nct-table th:hover,
-.nct-table th:focus-within {
-  padding-right: var(--nct-gutter-th);
 }
 
 .nct-table td {
@@ -167,20 +161,12 @@
   border-radius: var(--radius-s);
 }
 
-/* 单元格内容盒：行高拖拽时定高 + 内部滚动；
-   悬停/编辑时右侧让出悬浮槽，×/＋子表 落槽内，永不遮挡文字 */
+/* 单元格内容盒：行高拖拽时定高 + 内部滚动 */
 .nct-cell-box {
   position: relative;
   padding: 4px 8px;
   box-sizing: border-box;
   min-height: 1.6em;
-  transition: padding-right 0.12s ease;
-}
-
-.nct-cell-td:hover .nct-cell-box,
-.nct-cell-td:focus-within .nct-cell-box,
-.nct-cell-td.nct-collapsed .nct-cell-box {
-  padding-right: var(--nct-gutter);
 }
 
 .nct-cell {
@@ -205,9 +191,9 @@
   transition: padding-top 0.12s ease;
 }
 
-/* 子表工具栏/折叠钮的悬浮槽：悬停子表区才向下让出，不压父格文字也不压子表表头 */
-.nct-cell-child.nct-has-child:hover,
-.nct-cell-child.nct-has-child:focus-within {
+/* 子表工具栏悬浮槽：仅最内层表格悬停/聚焦时向下让出，祖先层不开槽 */
+.nct-cell-child.nct-has-child:hover:not(:has(.nct-table-block .nct-table-block:hover)),
+.nct-cell-child.nct-has-child:focus-within:not(:has(.nct-table-block .nct-table-block:focus-within)) {
   padding-top: var(--nct-strip);
 }
 
@@ -240,81 +226,6 @@
 
 .nct-conflict button {
   font-size: var(--font-ui-smaller);
-}
-
-/* 阅读优先：所有操作控件绝对定位悬浮，不占布局空间 */
-.nct-col-del {
-  position: absolute;
-  top: 2px;
-  right: 8px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.12s ease;
-}
-
-.nct-row-del {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  z-index: 4;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.12s ease;
-}
-
-.nct-table th:hover .nct-col-del,
-.nct-table th:focus-within .nct-col-del,
-.nct-table tbody tr:hover .nct-row-del,
-.nct-table tbody tr:focus-within .nct-row-del {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-/* 折叠/展开与 +子表：悬浮小 chip，落在右侧悬浮槽内；折叠态常驻便于发现 */
-.nct-toggle {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 5;
-  padding: 1px 6px;
-  font-size: var(--font-ui-smaller);
-  border-style: dashed;
-  color: var(--text-muted);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.12s ease;
-}
-
-.nct-child-chip {
-  position: absolute;
-  bottom: 2px;
-  right: 2px;
-  z-index: 4;
-  padding: 1px 4px;
-  font-size: var(--font-ui-smaller);
-  border-style: dashed;
-  color: var(--text-muted);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.12s ease;
-}
-
-/* 折叠钮与子表悬浮槽同条件显现：槽不开钮不现，避免浮在子表表头上 */
-.nct-cell-child.nct-has-child:hover .nct-toggle,
-.nct-cell-child.nct-has-child:focus-within .nct-toggle {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.nct-cell-td:hover .nct-child-chip,
-.nct-cell-td:focus-within .nct-child-chip {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.nct-child-chip.is-collapsed {
-  opacity: 1;
-  pointer-events: auto;
 }
 
 /* 行列拖拽手柄：贴边 6px，悬停/拖动时显示主题色导线 */
@@ -406,12 +317,48 @@ body.nct-resizing-row * {
   padding: 0 2px;
 }
 
+/* 图片：wrap 承载角柄；拖拽实时调宽，双击还原；max-width 保证不撑破单元格 */
+.nct-img-wrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
 .nct-img {
   display: block;
   max-width: 100%;
   margin: 2px 0;
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-s);
+}
+
+.nct-img-resize {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  box-sizing: border-box;
+  background: var(--background-primary);
+  border: 2px solid var(--interactive-accent);
+  border-radius: 3px;
+  cursor: nwse-resize;
+  z-index: 5;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.nct-img-wrap:hover .nct-img-resize,
+.nct-img-resize.is-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+body.nct-resizing-img,
+body.nct-resizing-img * {
+  cursor: nwse-resize !important;
+  user-select: none !important;
 }
 
 .nct-img-missing {

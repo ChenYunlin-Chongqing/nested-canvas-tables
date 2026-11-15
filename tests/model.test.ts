@@ -7,6 +7,8 @@ import {
   createTable,
   findCell,
   hasContent,
+  insertColumn,
+  insertRow,
   normalizeColumnHeaders,
   removeColumn,
   removeRow,
@@ -139,4 +141,29 @@ test("增删行列同步维护 columnWidths/rowHeights 对齐", () => {
   assert.deepEqual(t.rowHeights, [null, null]);
   assert.equal(t.columnWidths.length, t.columns.length);
   assert.equal(t.rowHeights.length, t.rows.length);
+});
+
+test("指定位置插入行/列：单元格与尺寸数组同步对齐", () => {
+  const t = createTable("t", 2, 2);
+  t.columnWidths = [120, null];
+  t.rowHeights = [40, null];
+  t.columnStyles = [{ color: "red" }, null];
+  t.rows[0].cells[0].text = "甲";
+  t.rows[1].cells[0].text = "乙";
+  insertRow(t, 1);
+  assert.equal(t.rows.length, 3);
+  assert.equal(t.rows[1].cells.length, 2);
+  assert.equal(t.rows[1].cells[0].text, "");
+  assert.equal(t.rows[2].cells[0].text, "乙");
+  assert.deepEqual(t.rowHeights, [40, null, null]);
+  insertColumn(t, 0);
+  assert.deepEqual(t.columns, ["列 3", "列 1", "列 2"]);
+  assert.deepEqual(t.columnWidths, [null, 120, null]);
+  assert.deepEqual(t.columnStyles, [null, { color: "red" }, null]);
+  for (const row of t.rows) {
+    assert.equal(row.cells.length, 3);
+    assert.equal(row.cells[1].text === "甲" || row.cells[1].text === "乙" || row.cells[1].text === "", true);
+  }
+  assert.equal(t.rows[0].cells[1].text, "甲");
+  assert.equal(t.rows[2].cells[1].text, "乙");
 });

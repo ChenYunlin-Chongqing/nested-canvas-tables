@@ -55,20 +55,28 @@ export function createDocument(title: string): TableDocument {
   return { formatVersion: 1, ...createTable(title) };
 }
 
-export function addRow(table: Table): Row {
+export function insertRow(table: Table, index: number): Row {
   const row = createRow(table.columns.length);
-  table.rows.push(row);
-  table.rowHeights?.push(null);
+  table.rows.splice(index, 0, row);
+  table.rowHeights?.splice(index, 0, null);
   return row;
 }
 
-export function addColumn(table: Table): string {
+export function addRow(table: Table): Row {
+  return insertRow(table, table.rows.length);
+}
+
+export function insertColumn(table: Table, index: number): string {
   const header = `列 ${table.columns.length + 1}`;
-  table.columns.push(header);
-  table.columnStyles?.push(null);
-  table.columnWidths?.push(null);
-  for (const row of table.rows) row.cells.push(createCell());
+  table.columns.splice(index, 0, header);
+  table.columnStyles?.splice(index, 0, null);
+  table.columnWidths?.splice(index, 0, null);
+  for (const row of table.rows) row.cells.splice(index, 0, createCell());
   return header;
+}
+
+export function addColumn(table: Table): string {
+  return insertColumn(table, table.columns.length);
 }
 
 export function removeRow(table: Table, rowId: string): void {

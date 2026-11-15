@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { wrapSelection, wrapSelectionColor, stripColorSpans, parseImageToken, toggleWrap, MD_TOKENS, TOOLBAR_FORMAT_COMMANDS } from "../src/core/markdown.ts";
+import { wrapSelection, wrapSelectionColor, stripColorSpans, parseImageToken, formatImageToken, findImageTokens, toggleWrap, MD_TOKENS, TOOLBAR_FORMAT_COMMANDS } from "../src/core/markdown.ts";
 
 test("有选区：包裹选区并返回末尾光标", () => {
   const r = wrapSelection("abc", 1, 2, "==");
@@ -91,9 +91,33 @@ test("图片 token 解析：wikilink 与 mdlink", () => {
     kind: "wikilink",
     src: "NestedTables/attachments/a.png",
     alt: "",
+    width: undefined,
   });
-  assert.deepEqual(parseImageToken("![[a.png|封面]]"), { kind: "wikilink", src: "a.png", alt: "封面" });
-  assert.deepEqual(parseImageToken("![图](attachments/a.png)"), { kind: "mdlink", src: "attachments/a.png", alt: "图" });
+  assert.deepEqual(parseImageToken("![[a.png|封面]]"), { kind: "wikilink", src: "a.png", alt: "封面", width: undefined });
+  assert.deepEqual(parseImageToken("![图](attachments/a.png)"), { kind: "mdlink", src: "attachments/a.png", alt: "图", width: undefined });
   assert.equal(parseImageToken("[[a.png]]"), null);
   assert.equal(parseImageToken("![]( )"), null);
+});
+
+test("图片宽度：|N 后缀解析为像素宽（wikilink 兼容 Obsidian 原生语法）", () => {
+  assert.deepEqual(parseImageToken("![[a.png|400]]"), { kind: "wikilink", src: "a.png", alt: "", width: 400 });
+  assert.deepEqual(parseImageToken("![[a.png|封面|400]]"), { kind: "wikilink", src: "a.png", alt: "封面", width: 400 });
+  assert.deepEqual(parseImageToken("![图|300](a.png)"), { kind: "mdlink", src: "a.png", alt: "图", width: 300 });
+  assert.equal(parseImageToken("![[a.png|300x200]]")?.width, undefined);
+});
+
+test("图片宽度序列化往返与 findImageTokens 偏移", () => {
+  const ref = parseImageToken("![[a.png|400]]");
+  assert.ok(ref);
+  assert.equal(formatImageToken(ref), "![[a.png|400]]");
+  assert.equal(formatImageToken({ ...ref, width: undefined }), "![[a.png]]");
+  assert.equal(formatImageToken({ ...ref, alt: "封面" }), "![[a.png|封面|400]]");
+  assert.equal(formatImageToken({ kind: "mdlink", src: "a.png", alt: "图", width: 300 }), "![图|300](a.png)");
+  assert.equal(formatImageToken({ kind: "mdlink", src: "a.png", alt: "图" }), "![图](a.png)");
+  const text = "前![[a.png|400]]中![图|300](b.png)后";
+  const hits = findImageTokens(text);
+  assert.equal(hits.length, 2);
+  assert.equal(text.slice(hits[0].start, hits[0].end), "![[a.png|400]]");
+  assert.equal(hits[1].ref.width, 300);
+  assert.equal(hits[1].ref.src, "b.png");
 });

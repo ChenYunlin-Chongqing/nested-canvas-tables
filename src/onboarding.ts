@@ -54,8 +54,8 @@ const STEPS: Step[] = [
   { target: ".nct-cell", text: "右键格式菜单：先选中文字再改颜色，只染选中部分。" },
   { target: ".nct-cell", text: "输入 ==荧光== 或 **加粗**，失焦即渲染，可互相嵌套。" },
   { target: ".nct-col-resize", text: "拖表头右缘调列宽、行底缘调行高；双击恢复自适应。" },
-  { target: ".nct-child-chip", text: "悬停单元格点 +子表 嵌套；图片可直接粘贴或拖入格子。" },
-  { target: ".nct-toolbar", text: "悬停表格右上浮现 +行 / +列；所有按钮悬浮不占位置。" },
+  { target: ".nct-cell", text: "右键也管结构：添加子表、加删行列、折叠子表；图片拖右下角小方块调大小，双击还原。" },
+  { target: ".nct-toolbar", text: "悬停只显最内层表格的 +行 / +列（子表另有折叠/删除），外层自动隐藏不叠加。" },
   { target: ".nct-status", text: "自动保存；数据被外部修改会停写并提示。" },
   { target: "", text: "完成！可随时用命令「使用引导」重看。" },
 ];

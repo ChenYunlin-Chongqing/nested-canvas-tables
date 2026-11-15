@@ -18,14 +18,54 @@ export interface ImageRef {
   kind: "wikilink" | "mdlink";
   src: string;
   alt: string;
+  // 像素宽；wikilink 用 Obsidian 原生 ![[path|宽]] 语法，mdlink 用 ![alt|宽](url) 扩展
+  width?: number;
 }
 
 export function parseImageToken(token: string): ImageRef | null {
   let m = /^!\[\[([^\]|]+)(?:\|([^\]]*))?\]\]$/.exec(token);
-  if (m) return { kind: "wikilink", src: m[1].trim(), alt: (m[2] ?? "").trim() };
+  if (m) {
+    const parts = (m[2] ?? "").split("|");
+    const last = parts[parts.length - 1]?.trim() ?? "";
+    const width = /^\d+$/.test(last) ? Number(last) : undefined;
+    const alt = (width !== undefined ? parts.slice(0, -1) : parts).join("|").trim();
+    return { kind: "wikilink", src: m[1].trim(), alt, width };
+  }
   m = /^!\[([^\]]*)\]\(([^)\s]+)\)$/.exec(token);
-  if (m) return { kind: "mdlink", src: m[2], alt: m[1] };
+  if (m) {
+    const am = /^(.*)\|(\d+)$/.exec(m[1]);
+    return { kind: "mdlink", src: m[2], alt: am ? am[1] : m[1], width: am ? Number(am[2]) : undefined };
+  }
   return null;
+}
+
+export function formatImageToken(ref: ImageRef): string {
+  if (ref.kind === "wikilink") {
+    const payload = [ref.alt, ref.width !== undefined ? String(ref.width) : ""].filter((s) => s !== "").join("|");
+    return payload ? `![[${ref.src}|${payload}]]` : `![[${ref.src}]]`;
+  }
+  const alt = ref.width !== undefined ? `${ref.alt}|${ref.width}` : ref.alt;
+  return `![${alt}](${ref.src})`;
+}
+
+export interface ImageTokenHit {
+  token: string;
+  start: number;
+  end: number;
+  ref: ImageRef;
+}
+
+const IMAGE_RE = /(!\[\[[^\]|]+(?:\|[^\]]*)?\]\])|(!\[[^\]]*\]\([^)\s]+\))/g;
+
+export function findImageTokens(text: string): ImageTokenHit[] {
+  const hits: ImageTokenHit[] = [];
+  IMAGE_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = IMAGE_RE.exec(text)) !== null) {
+    const ref = parseImageToken(m[0]);
+    if (ref) hits.push({ token: m[0], start: m.index, end: m.index + m[0].length, ref });
+  }
+  return hits;
 }
 
 const COLOR_CSS = new Set(TEXT_COLORS.map((c) => c.css.toLowerCase()));
@@ -139,6 +179,8 @@ function build(text: string, out: Node, depth: number, opts: RenderOptions): voi
         img.src = url;
         img.alt = ref.alt || ref.src;
         img.title = ref.src;
+        if (ref.width !== undefined) img.style.width = `${ref.width}px`;
+        img.dataset.nctToken = whole;
         out.appendChild(img);
       } else {
         const chip = document.createElement("span");

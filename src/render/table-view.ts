@@ -5,6 +5,8 @@ import {
   createTable,
   findCell,
   hasContent,
+  insertColumn,
+  insertRow,
   removeColumn,
   removeRow,
   tableAtPath,
@@ -15,6 +17,9 @@ import {
 import {
   MD_TOKENS,
   TOOLBAR_FORMAT_COMMANDS,
+  findImageTokens,
+  formatImageToken,
+  parseImageToken,
   renderInlineMarkdown,
   stripColorSpans,
   toggleWrap,
@@ -83,7 +88,9 @@ export class NctableView extends MarkdownRenderChild {
       e.preventDefault();
       e.stopPropagation();
       const cell = findCell(this.doc, td.dataset.cellId ?? "");
-      if (cell) this.openCellMenu(cell, td, e);
+      if (!cell) return;
+      const img = (target.closest("img.nct-img") ?? target.closest(".nct-img-wrap")?.querySelector("img.nct-img") ?? null) as HTMLImageElement | null;
+      this.openCellMenu(cell, td, e, img);
     });
     void this.init();
   }
@@ -148,7 +155,7 @@ export class NctableView extends MarkdownRenderChild {
     if (this.pluginSettings().showHints) {
       const hint = document.createElement("div");
       hint.className = "nct-hint";
-      hint.textContent = "悬停浮现操作 · 右键格式（选中文字单独变色）· ==荧光== **加粗** 失焦渲染 · 拖边线调行高列宽 · 粘贴/拖入图片 · 左侧栏一键新建";
+      hint.textContent = "悬停只显最内层控件 · 右键格式/结构（加删行列、子表、折叠）· ==荧光== **加粗** 失焦渲染 · 拖边线调行高列宽 · 拖图片角柄调大小 · 粘贴/拖入图片 · 左侧栏一键新建";
       this.containerEl.appendChild(hint);
       const timer = window.setTimeout(() => hint.classList.add("is-faded"), 8000);
       this.register(() => window.clearTimeout(timer));
@@ -178,13 +185,24 @@ export class NctableView extends MarkdownRenderChild {
     toolbar.appendChild(this.button("+ 行", "", () => { addRow(table); this.render(); this.scheduleSave(); }));
     toolbar.appendChild(this.button("+ 列", "", () => { addColumn(table); this.render(); this.scheduleSave(); }));
     if (isChild) {
-      toolbar.appendChild(this.button("删除子表", "nct-danger", () => {
+      const fold = this.button("折叠", "", () => {
+        this.collapsed.add(path[path.length - 1]);
+        this.render();
+      });
+      fold.title = "折叠子表";
+      toolbar.appendChild(fold);
+      const del = this.button("删除子表", "nct-danger", () => {
         if (hasContent(table) && !window.confirm("删除此子表格及其全部内容，确定？")) return;
         const parentCell = this.cellAtPath(path);
-        if (parentCell) delete parentCell.childTable;
+        if (parentCell) {
+          delete parentCell.childTable;
+          this.collapsed.delete(parentCell.id);
+        }
         this.render();
         this.scheduleSave();
-      }));
+      });
+      del.title = "删除此子表格";
+      toolbar.appendChild(del);
     }
     block.appendChild(toolbar);
 
@@ -209,16 +227,6 @@ export class NctableView extends MarkdownRenderChild {
         this.scheduleSave();
       }, this.signal());
       th.appendChild(head);
-      const del = this.button("×", "nct-del nct-col-del", () => {
-        const occupied = table.rows.some((r) => { const c = r.cells[i]; return c.text.trim() !== "" || !!c.childTable; });
-        if (occupied && !window.confirm(`删除「${table.columns[i] || `列 ${i + 1}`}」将同时删除该列所有单元格内容（含子表格），确定？`)) return;
-        removeColumn(table, i);
-        this.render();
-        this.scheduleSave();
-      });
-      del.disabled = table.columns.length <= 1;
-      del.title = "删除此列";
-      th.appendChild(del);
       const grip = document.createElement("div");
       grip.className = "nct-col-resize";
       grip.title = "拖动调整列宽，双击恢复自适应";
@@ -440,36 +448,21 @@ export class NctableView extends MarkdownRenderChild {
     box.appendChild(text);
 
     const childArea = document.createElement("div");
-    childArea.className = "nct-cell-child" + (cell.childTable ? " nct-has-child" : "");
-    if (cell.childTable) {
-      const isCollapsed = this.collapsed.has(cell.id);
-      if (isCollapsed) {
-        td.classList.add("nct-collapsed");
-        const chip = this.button("▶子表", "nct-child-chip is-collapsed", () => {
-          this.collapsed.delete(cell.id);
-          this.render();
-        });
-        chip.title = "展开子表";
-        td.appendChild(chip);
-      } else {
-        const toggle = this.button("▼ 折叠", "nct-toggle", () => {
-          this.collapsed.add(cell.id);
-          this.render();
-        });
-        toggle.title = "折叠子表";
-        childArea.appendChild(toggle);
-        childArea.appendChild(this.buildTable(cell.childTable, [...path, cell.id], true));
-      }
-    } else {
-      const chip = this.button("+子表", "nct-child-chip", () => {
-        cell.childTable = createTable(`子表格 ${ri + 1}-${ci + 1}`, 2, 1);
-        this.render();
-        this.scheduleSave();
-      });
-      chip.title = "在此格嵌套子表格";
-      td.appendChild(chip);
+    const isCollapsed = !!cell.childTable && this.collapsed.has(cell.id);
+    childArea.className = "nct-cell-child" + (cell.childTable && !isCollapsed ? " nct-has-child" : "");
+    if (cell.childTable && !isCollapsed) {
+      childArea.appendChild(this.buildTable(cell.childTable, [...path, cell.id], true));
     }
     box.appendChild(childArea);
+    if (cell.childTable && isCollapsed) {
+      // 流内 chip：排在文字之后，绝不遮挡内容
+      const chip = this.button(`▶ 子表（${cell.childTable.rows.length}×${cell.childTable.columns.length}）`, "nct-expand-chip", () => {
+        this.collapsed.delete(cell.id);
+        this.render();
+      });
+      chip.title = "展开子表";
+      box.appendChild(chip);
+    }
     td.appendChild(box);
 
     const grip = document.createElement("div");
@@ -477,18 +470,6 @@ export class NctableView extends MarkdownRenderChild {
     grip.title = "拖动调整行高，双击恢复自适应";
     this.attachRowResize(grip, table, ri, tbody);
     td.appendChild(grip);
-
-    const rowDel = this.button("×", "nct-del nct-row-del", () => {
-      const row = table.rows[ri];
-      const occupied = row.cells.some((c) => c.text.trim() !== "" || !!c.childTable);
-      if (occupied && !window.confirm(`删除第 ${ri + 1} 行及其全部内容（含子表格），确定？`)) return;
-      removeRow(table, row.id);
-      this.render();
-      this.scheduleSave();
-    });
-    rowDel.disabled = table.rows.length <= 1;
-    rowDel.title = "删除此行";
-    td.appendChild(rowDel);
 
     td.addEventListener("dragover", (e) => {
       if (Array.from(e.dataTransfer?.types ?? []).includes("Files")) {
@@ -511,6 +492,65 @@ export class NctableView extends MarkdownRenderChild {
   private paintCell(el: HTMLElement, cell: Cell): void {
     el.replaceChildren(renderInlineMarkdown(cell.text, { resolveImage: this.resolveImage }));
     el.style.color = textColorCss(cell.style?.color) ?? "";
+    this.attachImageResizers(el, cell);
+  }
+
+  // 图片包一层 wrap 并挂角柄：拖拽实时调宽、落盘写回 token；双击还原原始宽度
+  private attachImageResizers(el: HTMLElement, cell: Cell): void {
+    const seen = new Map<string, number>();
+    for (const img of Array.from(el.querySelectorAll<HTMLImageElement>("img.nct-img"))) {
+      const token = img.dataset.nctToken ?? "";
+      const occ = seen.get(token) ?? 0;
+      seen.set(token, occ + 1);
+      const wrap = document.createElement("span");
+      wrap.className = "nct-img-wrap";
+      img.replaceWith(wrap);
+      wrap.appendChild(img);
+      const handle = document.createElement("div");
+      handle.className = "nct-img-resize";
+      handle.title = "拖动调整图片宽度，双击恢复原始";
+      wrap.appendChild(handle);
+      this.attachImageResize(handle, img, cell, token, occ, el);
+    }
+  }
+
+  private attachImageResize(handle: HTMLElement, img: HTMLImageElement, cell: Cell, token: string, occ: number, el: HTMLElement): void {
+    handle.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const startX = e.clientX;
+      const startW = img.getBoundingClientRect().width;
+      let lastW = Math.round(startW);
+      handle.setPointerCapture(e.pointerId);
+      handle.classList.add("is-active");
+      document.body.classList.add("nct-resizing-img");
+      const move = (ev: PointerEvent) => {
+        lastW = Math.max(40, Math.min(1600, Math.round(startW + ev.clientX - startX)));
+        img.style.width = `${lastW}px`;
+      };
+      const up = () => {
+        handle.classList.remove("is-active");
+        document.body.classList.remove("nct-resizing-img");
+        handle.removeEventListener("pointermove", move);
+        this.setImageWidth(cell, token, occ, lastW, el);
+      };
+      handle.addEventListener("pointermove", move, this.signal());
+      handle.addEventListener("pointerup", up, { once: true });
+      handle.addEventListener("pointercancel", up, { once: true });
+    }, this.signal());
+    handle.addEventListener("dblclick", (e) => {
+      e.stopPropagation();
+      this.setImageWidth(cell, token, occ, null, el);
+    }, this.signal());
+  }
+
+  private setImageWidth(cell: Cell, token: string, occ: number, width: number | null, el: HTMLElement): void {
+    const hit = findImageTokens(cell.text).filter((h) => h.token === token)[occ];
+    if (!hit) return;
+    const ref = { ...hit.ref, width: width ?? undefined };
+    cell.text = cell.text.slice(0, hit.start) + formatImageToken(ref) + cell.text.slice(hit.end);
+    this.paintCell(el, cell);
+    this.scheduleSave();
   }
 
   private resolveImage = (src: string): string | null => {
@@ -529,12 +569,22 @@ export class NctableView extends MarkdownRenderChild {
     return this.containerEl.querySelector<HTMLElement>(`[data-cell-id="${cell.id}"] .nct-cell`);
   }
 
-  private openCellMenu(cell: Cell, td: HTMLElement, e: MouseEvent): void {
+  private openCellMenu(cell: Cell, td: HTMLElement, e: MouseEvent, img: HTMLImageElement | null = null): void {
     // 菜单项的真实点击会夺焦并折叠选区：选区偏移必须在开菜单这一刻捕获
     const editor = this.editorFor(cell);
     const captured = editor ? this.renderedSelectionRange(cell, editor) : null;
     const menu = new Menu();
     menu.setUseNativeMenu(false);
+    if (img && editor) {
+      const token = img.dataset.nctToken ?? "";
+      const current = parseImageToken(token)?.width;
+      const occ = Array.from(editor.querySelectorAll<HTMLImageElement>("img.nct-img")).filter((i) => i.dataset.nctToken === token).indexOf(img);
+      for (const [label, w] of [["小（200）", 200], ["中（400）", 400], ["大（600）", 600]] as [string, number][]) {
+        menu.addItem((it) => it.setTitle(`图片尺寸：${label}`).setIcon("image").setChecked(current === w).onClick(() => this.setImageWidth(cell, token, occ, w, editor)));
+      }
+      menu.addItem((it) => it.setTitle("图片尺寸：原始（不限宽）").setIcon("image").setChecked(current === undefined).onClick(() => this.setImageWidth(cell, token, occ, null, editor)));
+      menu.addSeparator();
+    }
     for (const { token, label } of MD_TOKENS) {
       menu.addItem((it) => it.setTitle(label).setIcon(TOKEN_ICONS[token]).onClick(() => this.applyWrap(cell, token, captured)));
     }
@@ -555,11 +605,74 @@ export class NctableView extends MarkdownRenderChild {
     menu.addItem((it) =>
       it.setTitle("粘贴").setIcon("clipboard-paste").onClick(() => void navigator.clipboard.readText().then((t) => this.insertText(cell, t))),
     );
+    this.addStructureItems(menu, cell, td);
     menu.addSeparator();
     menu.addItem((it) =>
       it.setTitle("适应容器宽度").setIcon("stretch-horizontal").setChecked(!!this.doc?.fitWidth).onClick(() => this.toggleFitWidth()),
     );
     menu.showAtMouseEvent(e);
+  }
+
+  // 结构操作统一收进右键菜单：悬浮层只留最内层工具栏，避免嵌套时层层叠加遮字
+  private addStructureItems(menu: Menu, cell: Cell, td: HTMLElement): void {
+    if (!this.doc) return;
+    const block = td.closest(".nct-table-block") as HTMLElement | null;
+    const table = block ? tableAtPath(this.doc, JSON.parse(block.dataset.path ?? "[]") as string[]) : null;
+    if (!table) return;
+    const ri = table.rows.findIndex((r) => r.cells.some((c) => c.id === cell.id));
+    const ci = ri >= 0 ? table.rows[ri].cells.findIndex((c) => c.id === cell.id) : -1;
+    menu.addSeparator();
+    if (!cell.childTable) {
+      menu.addItem((it) =>
+        it.setTitle("添加子表").setIcon("table").onClick(() => {
+          cell.childTable = createTable(`子表格 ${ri + 1}-${ci + 1}`, 2, 1);
+          this.render();
+          this.scheduleSave();
+        }),
+      );
+    } else {
+      const isCollapsed = this.collapsed.has(cell.id);
+      menu.addItem((it) =>
+        it.setTitle(isCollapsed ? "展开子表" : "折叠子表").setIcon(isCollapsed ? "chevrons-down-up" : "chevrons-up-down").onClick(() => {
+          if (isCollapsed) this.collapsed.delete(cell.id);
+          else this.collapsed.add(cell.id);
+          this.render();
+        }),
+      );
+      menu.addItem((it) =>
+        it.setTitle("删除子表").setIcon("trash").onClick(() => {
+          if (cell.childTable && hasContent(cell.childTable) && !window.confirm("删除此子表格及其全部内容，确定？")) return;
+          delete cell.childTable;
+          this.collapsed.delete(cell.id);
+          this.render();
+          this.scheduleSave();
+        }),
+      );
+    }
+    if (ri < 0 || ci < 0) return;
+    menu.addItem((it) => it.setTitle("上方插入行").setIcon("arrow-up").onClick(() => { insertRow(table, ri); this.render(); this.scheduleSave(); }));
+    menu.addItem((it) => it.setTitle("下方插入行").setIcon("arrow-down").onClick(() => { insertRow(table, ri + 1); this.render(); this.scheduleSave(); }));
+    menu.addItem((it) =>
+      it.setTitle("删除此行").setIcon("trash").setDisabled(table.rows.length <= 1).onClick(() => {
+        const row = table.rows[ri];
+        const occupied = row.cells.some((c) => c.text.trim() !== "" || !!c.childTable);
+        if (occupied && !window.confirm(`删除第 ${ri + 1} 行及其全部内容（含子表格），确定？`)) return;
+        removeRow(table, row.id);
+        this.render();
+        this.scheduleSave();
+      }),
+    );
+    menu.addItem((it) => it.setTitle("左侧插入列").setIcon("arrow-left").onClick(() => { insertColumn(table, ci); this.render(); this.scheduleSave(); }));
+    menu.addItem((it) => it.setTitle("右侧插入列").setIcon("arrow-right").onClick(() => { insertColumn(table, ci + 1); this.render(); this.scheduleSave(); }));
+    menu.addItem((it) =>
+      it.setTitle("删除此列").setIcon("trash").setDisabled(table.columns.length <= 1).onClick(() => {
+        const occupied = table.rows.some((r) => { const c = r.cells[ci]; return c.text.trim() !== "" || !!c.childTable; });
+        if (occupied && !window.confirm(`删除「${table.columns[ci] || `列 ${ci + 1}`}」将同时删除该列所有单元格内容（含子表格），确定？`)) return;
+        removeColumn(table, ci);
+        this.render();
+        this.scheduleSave();
+      }),
+    );
   }
 
   // 表头不渲染 markdown，故菜单只含颜色/底纹/清除/复制/粘贴
@@ -586,6 +699,18 @@ export class NctableView extends MarkdownRenderChild {
     menu.addItem((it) => it.setTitle("复制").setIcon("copy").onClick(() => void navigator.clipboard.writeText(table.columns[index])));
     menu.addItem((it) =>
       it.setTitle("粘贴").setIcon("clipboard-paste").onClick(() => void navigator.clipboard.readText().then((t) => this.insertHeaderText(table, index, colhead, t))),
+    );
+    menu.addSeparator();
+    menu.addItem((it) => it.setTitle("左侧插入列").setIcon("arrow-left").onClick(() => { insertColumn(table, index); this.render(); this.scheduleSave(); }));
+    menu.addItem((it) => it.setTitle("右侧插入列").setIcon("arrow-right").onClick(() => { insertColumn(table, index + 1); this.render(); this.scheduleSave(); }));
+    menu.addItem((it) =>
+      it.setTitle("删除此列").setIcon("trash").setDisabled(table.columns.length <= 1).onClick(() => {
+        const occupied = table.rows.some((r) => { const c = r.cells[index]; return c.text.trim() !== "" || !!c.childTable; });
+        if (occupied && !window.confirm(`删除「${table.columns[index] || `列 ${index + 1}`}」将同时删除该列所有单元格内容（含子表格），确定？`)) return;
+        removeColumn(table, index);
+        this.render();
+        this.scheduleSave();
+      }),
     );
     menu.addSeparator();
     menu.addItem((it) =>
