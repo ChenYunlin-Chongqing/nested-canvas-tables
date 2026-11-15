@@ -1,6 +1,6 @@
 {
   "name": "nested-canvas-tables",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Editable recursive nested tables on Obsidian native Canvas via Markdown cards. 原生画布上的递归嵌套表格卡片",
   "private": true,
   "type": "module",

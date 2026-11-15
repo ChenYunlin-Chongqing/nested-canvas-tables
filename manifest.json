@@ -1,7 +1,7 @@
 {
   "id": "nested-canvas-tables",
   "name": "嵌套表格 Nested Canvas Tables",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "minAppVersion": "1.5.0",
   "description": "在原生 Canvas 画布上摆放可编辑的递归嵌套表格卡片。Editable recursive nested tables on native Canvas via Markdown cards.",
   "author": "Yunlin Chen",
