@@ -74,4 +74,14 @@
 - 验收脚本开头必须 disable/enable 插件加载最新构建，否则断言旧代码（提示条文案等）；提示条/几何断言限定可见节点，避开隐藏旧视图。
 - 一键新建三分支：画布 active→vault.process 右侧追加节点（x=maxRight+60）；MarkdownView→editor.replaceSelection 插代码块；其余→新开卡片并打开。ribbon/命令/编辑器菜单共用 quickCreateTable/createTableData。
 
+【按钮遮挡文字 → 悬停预留槽（2026-11-15 用户报障修复）】
+- 症状：+子表/× 绝对定位悬浮直接压在单元格文字上，文字难点中。修复改「悬浮覆盖」为「预留槽」：.nct-cell-box 静止 padding-right:8px，td:hover/:focus-within 让槽到 --nct-gutter:44px，chip/× 绝对定位只落槽内；表头同法 26px；子表区 .nct-cell-child.nct-has-child:hover/:focus-within 顶部让槽 --nct-strip:28px 容纳 ▼折叠/子表工具栏。让槽条件==控件浮现条件（含祖先 hover 同时打开嵌套槽），结构上保证「可见即不压字」；折叠态 td.nct-collapsed 常驻右槽。
+- 坑：▼折叠 浮现条件若用 td:hover 而让槽条件用 childArea:hover，悬停父格时按钮出现但槽不开→仍遮挡。两者统一为 .nct-cell-child.nct-has-child:hover/:focus-within。
+- 验收：静止 pad 8px；悬停 pad≥40 且 chip.left≥editor.right-1、del.left≥editor.right-1；截图确认父格文字/子表头均不被工具栏压。
+
+【CDP 验收：后台窗口不派发 focus/blur 事件（易误判产品回归）】
+- Obsidian 窗口不在 OS 前景时 document.hasFocus()=false，element.focus()/blur() 只改 activeElement、不派发 focus/blur 事件→「失焦渲染」等断言全 FAIL，而落盘/菜单等不依赖事件的断言仍 PASS。Page.bringToFront 只激活标签页不拿 OS 焦点；osascript System Events 无辅助访问权限被拒。
+- 正解：页内 require("electron").remote.BrowserWindow.getAllWindows().find(w=>w.getTitle().includes("nctable-test-vault")).focus()（Obsidian renderer 有 node integration、remote 可用），等 ~400ms 后 hasFocus=true，真实 blur 即派发。验收脚本开头统一做。
+- 叠加坑：nct-89 旧版全局 querySelector(".canvas-node …") 命中其他套件遗留的隐藏旧视图（rect 0）：focus 静默失败、写入落在被冲突保护停写的旧 store。统一开头 disable/enable 加载新构建 + detach 全部 leaves + 按 rect.width>0 定位可见节点后 ALL_PASS。
+
 （后续踩坑随开发追加）

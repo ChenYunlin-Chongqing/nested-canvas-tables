@@ -414,7 +414,8 @@ export class NctableView extends MarkdownRenderChild {
     if (cell.childTable) {
       const isCollapsed = this.collapsed.has(cell.id);
       if (isCollapsed) {
-        const chip = this.button("▶ 子表", "nct-child-chip is-collapsed", () => {
+        td.classList.add("nct-collapsed");
+        const chip = this.button("▶子表", "nct-child-chip is-collapsed", () => {
           this.collapsed.delete(cell.id);
           this.render();
         });
@@ -430,7 +431,7 @@ export class NctableView extends MarkdownRenderChild {
         childArea.appendChild(this.buildTable(cell.childTable, [...path, cell.id], true));
       }
     } else {
-      const chip = this.button("+ 子表", "nct-child-chip", () => {
+      const chip = this.button("+子表", "nct-child-chip", () => {
         cell.childTable = createTable(`子表格 ${ri + 1}-${ci + 1}`, 2, 1);
         this.render();
         this.scheduleSave();
