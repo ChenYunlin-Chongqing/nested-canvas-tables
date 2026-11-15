@@ -18,6 +18,13 @@
 - **Editing Toolbar 适配**：画布内其工具栏的加粗/斜体/删除线/高亮/清除文本格式按钮直接作用于单元格选区（命令层接管 + 选区偏移追踪，按钮夺焦不丢选区）；普通笔记里仍走原命令，行为零回归。
 - 新手友好：首次启用自动打开示例画布并跑 10 步引导（高亮环 + 说明卡，`Enter` 下一步、`Esc` 跳过、「不再显示」同时关闭引导与提示条）；表格上方有一次性渐隐提示条（6s）。命令「使用引导」「打开使用示例」可随时重看；设置页可开关「显示操作提示」。
 
+## 安装
+
+要求 Obsidian ≥ 1.5.0。
+
+- **BRAT（推荐）**：社区插件安装 BRAT → 命令面板「BRAT: Plugins: Add a beta plugin for testing」→ 粘贴 `https://github.com/ChenYunlin-Chongqing/nested-canvas-tables` → 「添加插件」。自动下载最新 Release 并启用，后续可用 BRAT 检查更新。
+- **手动**：从 [Releases](https://github.com/ChenYunlin-Chongqing/nested-canvas-tables/releases) 下载 `main.js`、`manifest.json`、`styles.css`，放入 `<库>/.obsidian/plugins/nested-canvas-tables/`，重启 Obsidian 后在「社区插件」启用。
+
 ## 命令
 
 - **一键新建嵌套表格**（ribbon 图标 / 命令 / 编辑器右键「插入嵌套表格」）：画布内→右侧追加表格节点；Markdown 编辑器→光标处插入代码块；其余→新建卡片并打开。
