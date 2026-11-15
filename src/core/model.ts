@@ -16,6 +16,8 @@ export interface Table {
   id: string;
   title: string;
   columns: string[];
+  // 与 columns 等长的表头样式（null 表示无），缺省整体省略
+  columnStyles?: (CellStyle | null)[];
   rows: Row[];
 }
 
@@ -57,6 +59,7 @@ export function addRow(table: Table): Row {
 export function addColumn(table: Table): string {
   const header = `列 ${table.columns.length + 1}`;
   table.columns.push(header);
+  table.columnStyles?.push(null);
   for (const row of table.rows) row.cells.push(createCell());
   return header;
 }
@@ -72,6 +75,7 @@ export function removeColumn(table: Table, index: number): void {
   if (table.columns.length <= 1) throw new Error("至少保留一列");
   if (index < 0 || index >= table.columns.length) throw new Error("列不存在");
   table.columns.splice(index, 1);
+  table.columnStyles?.splice(index, 1);
   for (const row of table.rows) row.cells.splice(index, 1);
 }
 

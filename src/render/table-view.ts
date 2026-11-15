@@ -7,6 +7,7 @@ import {
   hasContent,
   removeColumn,
   removeRow,
+  tableAtPath,
   type Cell,
   type Table,
   type TableDocument,
@@ -33,8 +34,24 @@ export class NctableView extends MarkdownRenderChild {
       this.registerDomEvent(this.containerEl, type, (e) => e.stopPropagation());
     }
     this.registerDomEvent(this.containerEl, "contextmenu", (e) => {
-      const td = (e.target as HTMLElement).closest?.(".nct-cell-td") as HTMLElement | null;
-      if (!td || !this.doc) return;
+      if (!this.doc) return;
+      const target = e.target as HTMLElement;
+      if (target.closest("button")) return;
+      const colhead = target.closest(".nct-colhead") as HTMLElement | null;
+      if (colhead) {
+        const block = colhead.closest(".nct-table-block") as HTMLElement | null;
+        const table = block ? tableAtPath(this.doc, JSON.parse(block.dataset.path ?? "[]") as string[]) : null;
+        const index = Number(colhead.dataset.col);
+        if (!table || !Number.isInteger(index) || index < 0 || index >= table.columns.length) return;
+        e.preventDefault();
+        e.stopPropagation();
+        this.openHeaderMenu(table, index, colhead, e);
+        return;
+      }
+      const td = target.closest(".nct-cell-td") as HTMLElement | null;
+      if (!td) return;
+      // 右键落在嵌套子表的表头/工具栏等 chrome 上时，closest 会穿透到祖先 td；须限定在本表块内
+      if (target.closest(".nct-table-block") !== td.closest(".nct-table-block")) return;
       e.preventDefault();
       e.stopPropagation();
       const cell = findCell(this.doc, td.dataset.cellId ?? "");
@@ -120,6 +137,7 @@ export class NctableView extends MarkdownRenderChild {
   private buildTable(table: Table, path: string[], isChild: boolean): HTMLElement {
     const block = document.createElement("div");
     block.className = isChild ? "nct-table-block nct-child" : "nct-table-block";
+    block.dataset.path = JSON.stringify(path);
 
     const toolbar = document.createElement("div");
     toolbar.className = "nct-toolbar";
@@ -146,6 +164,10 @@ export class NctableView extends MarkdownRenderChild {
       head.className = "nct-colhead";
       head.contentEditable = "plaintext-only";
       head.textContent = header;
+      head.dataset.col = String(i);
+      const headStyle = table.columnStyles?.[i];
+      th.style.background = bgTintCss(headStyle?.bg) ?? "";
+      th.style.color = textColorCss(headStyle?.color) ?? "";
       head.addEventListener("input", () => {
         table.columns[i] = head.textContent ?? "";
         this.scheduleSave();
@@ -291,6 +313,58 @@ export class NctableView extends MarkdownRenderChild {
       it.setTitle("粘贴").onClick(() => void navigator.clipboard.readText().then((t) => this.insertText(cell, t))),
     );
     menu.showAtMouseEvent(e);
+  }
+
+  // 表头不渲染 markdown，故菜单只含颜色/底纹/清除/复制/粘贴
+  private openHeaderMenu(table: Table, index: number, colhead: HTMLElement, e: MouseEvent): void {
+    const th = colhead.closest("th") as HTMLElement | null;
+    const style = table.columnStyles?.[index];
+    const menu = new Menu();
+    menu.setUseNativeMenu(false);
+    for (const c of TEXT_COLORS) {
+      menu.addItem((it) =>
+        it.setTitle(`文字颜色：${c.label}`).setChecked(style?.color === c.token).onClick(() => this.applyHeaderStyle(table, index, th, { color: c.token })),
+      );
+    }
+    menu.addItem((it) => it.setTitle("文字颜色：默认").setChecked(!style?.color).onClick(() => this.applyHeaderStyle(table, index, th, { color: undefined })));
+    menu.addSeparator();
+    for (const b of BG_TINTS) {
+      menu.addItem((it) =>
+        it.setTitle(`底纹：${b.label}`).setChecked(style?.bg === b.token).onClick(() => this.applyHeaderStyle(table, index, th, { bg: b.token })),
+      );
+    }
+    menu.addItem((it) => it.setTitle("底纹：无").setChecked(!style?.bg).onClick(() => this.applyHeaderStyle(table, index, th, { bg: undefined })));
+    menu.addSeparator();
+    menu.addItem((it) => it.setTitle("清除格式").onClick(() => this.applyHeaderStyle(table, index, th, { color: undefined, bg: undefined })));
+    menu.addItem((it) => it.setTitle("复制").onClick(() => void navigator.clipboard.writeText(table.columns[index])));
+    menu.addItem((it) =>
+      it.setTitle("粘贴").onClick(() => void navigator.clipboard.readText().then((t) => this.insertHeaderText(table, index, colhead, t))),
+    );
+    menu.showAtMouseEvent(e);
+  }
+
+  private applyHeaderStyle(table: Table, index: number, th: HTMLElement | null, patch: { color?: string; bg?: string }): void {
+    const styles = table.columnStyles ?? (table.columnStyles = table.columns.map(() => null));
+    const next = { ...styles[index], ...patch };
+    for (const k of Object.keys(next) as (keyof typeof next)[]) if (next[k] === undefined) delete next[k];
+    styles[index] = Object.keys(next).length === 0 ? null : next;
+    if (styles.every((s) => s === null)) delete table.columnStyles;
+    if (th) {
+      th.style.background = bgTintCss(styles[index]?.bg) ?? "";
+      th.style.color = textColorCss(styles[index]?.color) ?? "";
+    }
+    this.scheduleSave();
+  }
+
+  private insertHeaderText(table: Table, index: number, colhead: HTMLElement, str: string): void {
+    if (document.activeElement !== colhead) colhead.focus();
+    const sel = window.getSelection();
+    const source = table.columns[index];
+    let at = source.length;
+    if (sel && sel.rangeCount > 0 && colhead.contains(sel.anchorNode)) at = Math.min(sel.getRangeAt(0).startOffset, source.length);
+    table.columns[index] = source.slice(0, at) + str + source.slice(at);
+    colhead.textContent = table.columns[index];
+    this.scheduleSave();
   }
 
   private applyWrap(cell: Cell, token: string): void {

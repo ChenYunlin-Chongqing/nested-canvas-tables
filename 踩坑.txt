@@ -59,4 +59,9 @@
 - 重置 data 文件须先卸载持有它的视图（detach leaf）再 modify 再重开；视图开着时外部 modify 会触发 store 冲突保护停写，且 modify 事件会 race 到新 store。
 - canvas-node-content-blocker 只拦截指针事件，不挡程序化 focus：验收聚焦单元格直接 el.focus() 即可，无需真实点击/双击进入节点编辑态（双击反而可能触发画布缩放/重渲染干扰）。
 
+【右键落点穿透（子表表头误染父格，2026-11-15 用户报障修复）】
+- 症状：选中子表列头文字右键改颜色，颜色却落到包裹子表的父单元格。根因：子表整体 DOM 在父 td 内，contextmenu 用 e.target.closest(".nct-cell-td") 会从子表表头/工具栏一路向上命中父 td。
+- 修复：① 落点限定——target.closest(".nct-table-block") 必须等于 td.closest(".nct-table-block")，否则不弹格式菜单（嵌套 chrome 不穿透）；按钮右键一律留给原生菜单。② 列头独立菜单——.nct-colhead 带 data-col、表块带 data-path（JSON 路径），经 tableAtPath 定位所属表；表头样式存 Table.columnStyles（与 columns 等长、null 占位、全 null 时整体删除），addColumn/removeColumn 同步 push/splice，validate 校验长度与 token。表头不渲染 markdown，菜单只含颜色/底纹/清除/复制/粘贴。
+- 验收：表头橙/底纹落 columnStyles 且 th 生效、父格 style 不变；清除回收；子表格/父格菜单回归；工具栏右键不弹格式菜单。9 项实机 PASS。
+
 （后续踩坑随开发追加）

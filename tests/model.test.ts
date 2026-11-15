@@ -114,3 +114,13 @@ test("旧 col_id 表头迁移为列 N（含递归子表）", () => {
   assert.deepEqual(t.columns, ["列 1", "列 2"]);
   assert.deepEqual(child.columns, ["列 1"]);
 });
+
+test("增删列同步维护 columnStyles 对齐", () => {
+  const t = createTable("t", 2, 1);
+  t.columnStyles = [{ color: "red" }, null];
+  addColumn(t);
+  assert.deepEqual(t.columnStyles, [{ color: "red" }, null, null]);
+  removeColumn(t, 0);
+  assert.deepEqual(t.columnStyles, [null, null]);
+  assert.equal(t.columnStyles.length, t.columns.length);
+});

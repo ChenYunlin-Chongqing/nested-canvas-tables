@@ -31,6 +31,15 @@ function checkTable(value: unknown, ids: Set<string>, label: string): string | n
   if (!Array.isArray(t.columns) || t.columns.length === 0 || t.columns.some((c) => typeof c !== "string")) {
     return `${label} columns 无效（至少一列，且均为字符串表头）`;
   }
+  if (t.columnStyles !== undefined) {
+    if (!Array.isArray(t.columnStyles) || t.columnStyles.length !== t.columns.length) {
+      return `${label} columnStyles 与列数不一致`;
+    }
+    for (let i = 0; i < t.columnStyles.length; i++) {
+      const styleError = validateCellStyle(t.columnStyles[i]);
+      if (styleError) return `${label}第 ${i + 1} 列表头 ${styleError}`;
+    }
+  }
   if (!Array.isArray(t.rows)) return `${label} rows 不是数组`;
   for (let i = 0; i < t.rows.length; i++) {
     const error = checkRow(t.rows[i], t.columns.length, ids, `${label}第 ${i + 1} 行`);
